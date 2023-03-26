@@ -2,8 +2,139 @@ package sampan
 
 import (
 	"github.com/stretchr/testify/assert"
+	"reflect"
 	"testing"
 )
+
+var (
+	LruTcs = []struct {
+		cap   int
+		nodes []lruNode
+	}{
+		{cap: 0, nodes: []lruNode{}},
+		{cap: 1, nodes: []lruNode{{path: "/", node: &node{path: "/"}}}},
+		{cap: 3, nodes: []lruNode{{path: "/", node: &node{path: "/"}}}},
+		{cap: 2, nodes: []lruNode{
+			{path: "/", node: &node{path: "/"}},
+			{path: "/hello", node: &node{path: "/hello"}}}},
+		{cap: 1, nodes: []lruNode{
+			{path: "/", node: &node{path: "/"}},
+			{path: "/hello", node: &node{path: "/hello"}}}},
+		{cap: 1, nodes: []lruNode{
+			{path: "/", node: &node{path: "/"}},
+			{path: "/hello", node: &node{path: "/hello"}}}},
+		{cap: 1, nodes: []lruNode{
+			{path: "/", node: &node{path: "/"}},
+			{path: "/hello", node: &node{path: "/hello"}},
+			{path: "/world", node: &node{path: "/world"}}}},
+		{cap: 2, nodes: []lruNode{
+			{path: "/", node: &node{path: "/"}},
+			{path: "/hello", node: &node{path: "/hello"}},
+			{path: "/world", node: &node{path: "/world"}}}},
+	}
+)
+
+func TestSplitPath(t *testing.T) {
+	tcs := []struct {
+		path  string
+		parts []string
+	}{
+		{path: "/", parts: []string{"/"}},
+		{path: "/hello", parts: []string{"/", "hello"}},
+		{path: "/hello/", parts: []string{"/", "hello/"}},
+		{path: "/hello/world", parts: []string{"/", "hello/", "world"}},
+		{path: "/hello/world/", parts: []string{"/", "hello/", "world/"}},
+		{path: "/hello/world/", parts: []string{"/", "hello/", "world/"}},
+		{path: "/hello/{abc}/world", parts: []string{"/", "hello/", "{abc}/", "world"}},
+		{path: "/hello/world/{abc}", parts: []string{"/", "hello/", "world/", "{abc}"}},
+		{path: "/hello/world/{ab\\/c}/", parts: []string{"/", "hello/", "world/", "{ab\\/c}/"}},
+		{
+			path:  "/123-{abc:[a-z]{3-5}}-567-{haha:\\w+}--world/world/{abc}-{def}/123-{abc:[a-z]{3-5}}-567-{haha:\\w+}--world++{a1:[0-9][0-9]?}ll/",
+			parts: []string{"/", "123-{abc:[a-z]{3-5}}-567-{haha:\\w+}--world/", "world/", "{abc}-{def}/", "123-{abc:[a-z]{3-5}}-567-{haha:\\w+}--world++{a1:[0-9][0-9]?}ll/"},
+		},
+	}
+	for _, tc := range tcs {
+		parts := splitPath(tc.path)
+		assert.True(t, reflect.DeepEqual(parts, tc.parts))
+	}
+}
+
+func TestNewLru(t *testing.T) {
+	for _, tc := range LruTcs {
+		l := newLru(tc.cap)
+		assert.NotNil(t, l)
+		assert.NotNil(t, l.paths)
+		assert.NotNil(t, l.nodes)
+	}
+}
+
+func TestLruClear(t *testing.T) {
+	for _, tc := range LruTcs {
+		l := newLru(tc.cap)
+		size := tc.cap
+		if len(tc.nodes) < tc.cap {
+			size = len(tc.nodes)
+		}
+		for i := 0; i < size; i++ {
+			l.nodes.PushBack(&tc.nodes[i])
+		}
+		l.clear()
+		assert.Equal(t, 0, l.len())
+	}
+}
+
+func TestLruLen(t *testing.T) {
+	for _, tc := range LruTcs {
+		l := newLru(tc.cap)
+		size := tc.cap
+		if len(tc.nodes) < tc.cap {
+			size = len(tc.nodes)
+		}
+		for i := 0; i < size; i++ {
+			ele := l.nodes.PushBack(&tc.nodes[i])
+			l.paths[tc.nodes[i].path] = ele
+		}
+		assert.Equal(t, size, l.len())
+	}
+}
+
+func TestLruPut(t *testing.T) {
+	for _, tc := range LruTcs {
+		l := newLru(tc.cap)
+		for _, n := range tc.nodes {
+			l.put(n.path, n.node)
+		}
+		size := tc.cap
+		if len(tc.nodes) < tc.cap {
+			size = len(tc.nodes)
+		}
+		assert.Equal(t, size, l.len())
+		for i := 1; i <= size; i++ {
+			assert.Equal(t, tc.nodes[len(tc.nodes)-i].node.path, l.nodes.Remove(l.nodes.Front()).(*lruNode).node.path)
+		}
+	}
+}
+
+func TestLruGet(t *testing.T) {
+	for _, tc := range LruTcs {
+		l := newLru(tc.cap)
+		size := tc.cap
+		if len(tc.nodes) < tc.cap {
+			size = len(tc.nodes)
+		}
+		for i := 0; i < size; i++ {
+			ele := l.nodes.PushBack(&tc.nodes[i])
+			l.paths[tc.nodes[i].path] = ele
+
+		}
+		assert.Equal(t, size, l.len())
+		for i := 0; i < size; i++ {
+			n := l.get(tc.nodes[i].path)
+			assert.Equal(t, tc.nodes[i].path, n.path)
+			assert.Equal(t, tc.nodes[i].path, l.nodes.Front().Value.(*lruNode).path)
+		}
+	}
+}
 
 /*func TestLcp(t *testing.T) {
 	cases := []struct {
@@ -30,18 +161,6 @@ import (
 		asst.Equal(tc.idx, lcp(&tc.s1, &tc.s2))
 	}
 }*/
-
-func TestNewRadix(t *testing.T) {
-	r := newRadix()
-	assert.NotNil(t, r)
-}
-
-func TestNewRouter(t *testing.T) {
-	r := newRouter()
-	assert.NotNil(t, r)
-	assert.NotNil(t, r.trees)
-	assert.NotNil(t, r.handlers)
-}
 
 func TestParseExps(t *testing.T) {
 	cases := []struct {
@@ -95,4 +214,15 @@ func TestNewNode(t *testing.T) {
 		assert.Nil(t, n.params)
 		assert.Nil(t, n.handler)
 	}
+}
+
+func TestNewRadix(t *testing.T) {
+	r := newRadix()
+	assert.NotNil(t, r)
+}
+
+func TestNewRouter(t *testing.T) {
+	r := newRouter()
+	assert.NotNil(t, r)
+	assert.NotNil(t, r.trees)
 }

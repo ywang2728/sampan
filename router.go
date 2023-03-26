@@ -1,6 +1,7 @@
 package sampan
 
 import (
+	"container/list"
 	"errors"
 	"log"
 	"regexp"
@@ -8,33 +9,110 @@ import (
 	"sync"
 )
 
+const (
+	LruCapacity int = 255
+)
+
 type (
 	node struct {
 		path     string
 		part     string
 		exps     map[string]*regexp.Regexp
-		children map[string]*node
 		params   map[string]string
 		handler  func(*Context)
+		children map[string]*node
+	}
+
+	lruNode struct {
+		path string
+		node *node
+	}
+
+	lru struct {
+		nodes *list.List
+		paths map[string]*list.Element
+		cap   int
+		mutex sync.Mutex
 	}
 
 	radix struct {
+		cache *lru
 		root  *node
-		count int
+		size  int
 		mutex sync.RWMutex
 	}
 
 	router struct {
-		trees    map[string]*radix
-		handlers map[string]func(*Context)
+		trees map[string]*radix
 	}
 )
 
-func formatPath(p string) {
-	if p[0] != '/' {
-		log.Fatalf("URL path formating error, #%v", errors.New(`invalid URL path:`+p))
+func splitPath(path string) (parts []string) {
+	part := strings.Builder{}
+	for i, t := 0, 0; i < len(path); i++ {
+		part.WriteString(string(path[i]))
+		if path[i] == '{' {
+			t++
+		} else if path[i] == '}' {
+			t--
+		} else if path[i] == '/' && t == 0 {
+			parts = append(parts, part.String())
+			part.Reset()
+		}
 	}
+	if part.Len() > 0 {
+		parts = append(parts, part.String())
+	}
+	return
+}
 
+func newLru(cap int) *lru {
+	return &lru{
+		cap:   cap,
+		nodes: list.New(),
+		paths: make(map[string]*list.Element, cap),
+	}
+}
+
+func (l *lru) clear() {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.nodes.Init()
+}
+
+func (l *lru) len() int {
+	return l.nodes.Len()
+}
+
+func (l *lru) put(path string, node *node) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	if e, ok := l.paths[path]; ok {
+		l.nodes.MoveToFront(e)
+	} else {
+		if l.nodes.Len() == l.cap {
+			delete(l.paths, l.nodes.Remove(l.nodes.Back()).(*lruNode).path)
+		}
+		l.paths[path] = l.nodes.PushFront(&lruNode{path: path, node: node})
+	}
+}
+
+func (l *lru) get(path string) (n *node) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	if e, ok := l.paths[path]; ok {
+		l.nodes.MoveToFront(e)
+		n = e.Value.(*lruNode).node
+	}
+	return
+}
+
+func (l *lru) delete(path string) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	if e, ok := l.paths[path]; ok {
+		delete(l.paths, l.nodes.Remove(e).(*lruNode).path)
+	}
 }
 
 func parseExps(part string) (matches []string) {
@@ -65,7 +143,7 @@ func parseExps(part string) (matches []string) {
 					}
 				}
 				matches = append(matches, s)
-				if strings.Contains(part[i:len(part)], "{") {
+				if strings.Contains(part[i:], "{") {
 					sb.Reset()
 				} else {
 					break
@@ -82,7 +160,9 @@ func parseExps(part string) (matches []string) {
 }
 
 func newNode(part string) (n *node) {
-	n = new(node)
+	n = &node{
+		children: make(map[string]*node),
+	}
 	if len(part) > 0 {
 		n.part = part
 		if strings.Contains(part, "{") {
@@ -97,14 +177,13 @@ func newNode(part string) (n *node) {
 			}
 		}
 	}
-	n.children = make(map[string]*node)
 	return
 }
 
-func newRadix() (r *radix) {
-	r = new(radix)
-	r.mutex = sync.RWMutex{}
-	return
+func newRadix() *radix {
+	return &radix{
+		cache: newLru(LruCapacity),
+	}
 }
 
 /*func (n *node) put(parts []string) (r *node, t *node) {
@@ -207,20 +286,12 @@ func (r *radix) clear() {
 		r.mutex.Lock()
 		defer r.mutex.Unlock()
 		r.root = nil
-		r.count = 0
+		r.cache.clear()
+		r.size = 0
 	}
 }
 
-func (r *radix) isEmpty() bool {
-	if r == nil {
-		return false
-	}
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
-	return r.count == 0
-}
-
-func (r *radix) size() int {
+func (r *radix) len() int {
 	if r == nil {
 		return 0
 	}
@@ -229,27 +300,15 @@ func (r *radix) size() int {
 	if r.root == nil {
 		return 0
 	}
-	return r.count
+	return r.size
 }
 
-/*func (r *radix) get(path string) (handler func(*Context)) {
-	if r == nil {
-		return nil
-	}
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
-	if r.root == nil {
-		return nil
-	}
-	handler = r.root.handler
-	if path != "/" {
-		t := r.root.get(parse(path))
-		if t == nil {
-			return nil
-		}
-		handler = t.handler
-	}
-	return
+// Add path(p) from node(n), if n is nil, insert directly on n, otherwise compare n's path with p, find common prefix,
+// if prefix is part of n, split n's path with creating new n, and update current n's path with rest of prefix and add as new n's child.
+// then create new node with the rest of p, add as new n's child.
+// wildcard segment will be considered as single node.
+func (r *radix) putRec(n *node, p string) (nr, t *node) {
+	return nil, nil
 }
 
 func (r *radix) put(path string, handler func(*Context)) (b bool) {
@@ -258,22 +317,63 @@ func (r *radix) put(path string, handler func(*Context)) (b bool) {
 	}
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	if r.root == nil {
-		r.root = newNode([]string{"/"})
-	}
-	t := r.root
-	if path != "/" {
-		r.root, t = r.root.put(parse(path))
-	}
+	var t *node
+	r.root, t = r.putRec(r.root, path)
 	if t != nil && len(t.path) == 0 {
 		t.path = path
 		t.handler = handler
-		r.count++
+		r.size++
 	}
 	return
 }
 
-func (r *radix) update(path string, handler func(*Context)) (b bool) {
+func (r *radix) getRec(n *node, p string) (t *node) {
+	return nil
+}
+
+func (r *radix) get(path string) func(*Context) {
+	if r == nil {
+		return nil
+	}
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	n := r.cache.get(path)
+	if n == nil {
+		if r.root == nil {
+			return nil
+		}
+		if n = r.getRec(r.root, path); n != nil {
+			r.cache.put(path, n)
+		} else {
+			return nil
+		}
+	}
+	//TODO: handle n.params
+	return n.handler
+}
+
+func (r *radix) deleteRec(n *node, p string) (b bool) {
+	return true
+}
+
+func (r *radix) delete(path string) (b bool) {
+	if r == nil {
+		return false
+	}
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	if r.deleteRec(r.root, path) {
+		r.size--
+		if strings.Contains(path, "{") {
+			r.cache.clear()
+		} else {
+			r.cache.delete(path)
+		}
+	}
+	return false
+}
+
+/*func (r *radix) update(path string, handler func(*Context)) (b bool) {
 	if r == nil {
 		return false
 	}
@@ -292,39 +392,31 @@ func (r *radix) update(path string, handler func(*Context)) (b bool) {
 	}
 	return false
 }
-
-func (r *radix) delete(path string) (b bool) {
-	if r == nil {
-		return false
-	}
-	parts := parse(path)
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	if len(parts) == 1 {
-		if len(r.root.children) != 0 {
-			return false
-		}
-		r.root.handler = nil
-		r.count--
-		return true
-	} else if r.root.delete(parts[1:]) {
-		r.count--
-		return true
-	}
-	return false
-}*/
+*/
 
 func newRouter() *router {
 	return &router{
-		trees:    make(map[string]*radix),
-		handlers: make(map[string]func(*Context)),
+		trees: make(map[string]*radix),
 	}
 }
 
-/*func (r *router) put(method string, path string, handler func(*Context)) {
+func (r *router) clear() {
+	for _, r := range r.trees {
+		r.clear()
+	}
+}
+
+func (r *router) len() (c int) {
+	for _, r := range r.trees {
+		c += r.len()
+	}
+	return
+}
+
+func (r *router) put(method string, path string, handler func(*Context)) {
 
 	log.Printf("Put route %4s - %s", method, path)
-	if path[0] != '/' {
+	if strings.HasPrefix(path, "/") {
 		panic("Path must begin with '/'!")
 	}
 	if handler == nil {
@@ -334,9 +426,6 @@ func newRouter() *router {
 		r.trees[method] = newRadix()
 	}
 	r.trees[method].put(path, handler)
-
-	key := fmt.Sprintf("%s-%s", method, path)
-	r.handlers[key] = handler
 }
 
 func (r *router) get(method string, path string) (handler func(*Context)) {
@@ -344,8 +433,8 @@ func (r *router) get(method string, path string) (handler func(*Context)) {
 	if path[0] != '/' {
 		panic("Path must begin with '/'!")
 	}
-	if tree, ok := r.trees[method]; ok {
-		return tree.get(path)
+	if _, ok := r.trees[method]; ok {
+		//return tree.get(path)
 	}
 	return nil
 }
@@ -353,8 +442,8 @@ func (r *router) get(method string, path string) (handler func(*Context)) {
 func (r *router) delete(method string, path string) (b bool) {
 	log.Printf("Delete route %4s - %s", method, path)
 
-	if tree, ok := r.trees[method]; ok {
-		return tree.delete(path)
+	if _, ok := r.trees[method]; ok {
+		//return tree.delete(path)
 	}
 	return false
-}*/
+}
