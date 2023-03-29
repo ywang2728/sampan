@@ -100,22 +100,57 @@ func (l *lru) delete(path string) {
 	}
 }
 
+// parse the prefix from path for one node base on the difference of regex segment and plain text segment.
+func parsePrefix(p string) (idx int, eof bool) {
+	if i, lp := 0, len(p); strings.Contains(p, "{") {
+		if strings.Contains(p[:strings.Index(p, "/")], "{") {
+			for cnt := 0; i < lp; i++ {
+				if p[i] == '{' {
+					cnt++
+				} else if p[i] == '}' {
+					cnt--
+				} else if p[i] == '/' && cnt == 0 {
+					idx = i
+					break
+				}
+			}
+		} else {
+			for i < lp {
+				if p[i] == '/' {
+					idx = i
+				} else if p[i] == '{' {
+					break
+				}
+				i++
+			}
+		}
+		if i == lp || i == lp-1 {
+			idx = lp - 1
+			eof = true
+		}
+	} else {
+		idx = lp - 1
+		eof = true
+	}
+	return
+}
+
 func parseExps(part string) (matches []string) {
 	expKeyRe := regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*$`)
 	var sb strings.Builder
-	t := 0
+	cnt := 0
 	for i := strings.Index(part, "{"); i < len(part); i++ {
 		if part[i] == '{' {
-			t++
-			if t != 1 {
+			cnt++
+			if cnt != 1 {
 				sb.WriteString("{")
 			}
 		} else if part[i] == '}' {
-			t--
-			if t != 0 {
+			cnt--
+			if cnt != 0 {
 				sb.WriteString("}")
 			}
-			if t == 0 {
+			if cnt == 0 {
 				s := sb.String()
 				if strings.Contains(s, ":") {
 					if strings.HasPrefix(s, ":") || strings.HasSuffix(s, ":") ||
@@ -134,11 +169,11 @@ func parseExps(part string) (matches []string) {
 					break
 				}
 			}
-		} else if t != 0 {
+		} else if cnt != 0 {
 			sb.WriteString(string(part[i]))
 		}
 	}
-	if t != 0 {
+	if cnt != 0 {
 		log.Fatalf("Expression parsing error, #%v", errors.New(`invalid expression:`+part))
 	}
 	return
@@ -159,42 +194,6 @@ func splitPath(path string) (parts []string) {
 	}
 	if part.Len() > 0 {
 		parts = append(parts, part.String())
-	}
-	return
-}
-
-// parse the prefix from path for one node base on the difference of regex segment and plain text segment.
-func parsePrefix(p string) (idx int, eof bool) {
-	if i, lp := 0, len(p); strings.Contains(p, "{") {
-		if strings.Contains(p[:strings.Index(p, "/")], "{") {
-			for flag := 0; i < lp; i++ {
-				if p[i] == '{' {
-					flag++
-				} else if p[i] == '}' {
-					flag--
-				} else if p[i] == '/' && flag == 0 {
-					idx = i
-					break
-				}
-			}
-		} else {
-			for i < lp {
-				switch p[i] {
-				case '/':
-					idx = i
-				case '{':
-					break
-				}
-				i++
-			}
-		}
-		if i == lp {
-			idx = lp - 1
-			eof = true
-		}
-	} else {
-		idx = lp - 1
-		eof = true
 	}
 	return
 }

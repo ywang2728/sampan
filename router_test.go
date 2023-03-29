@@ -217,14 +217,31 @@ func TestParsePrefix(t *testing.T) {
 		eof bool
 	}{
 		{p: "/", idx: 0, eof: true},
-		{p: "/1", idx: 1, eof: true},
-		{p: "/1/", idx: 2, eof: true},
-		{p: "/1/2/", idx: 4, eof: true},
 		{p: "/123", idx: 3, eof: true},
-		{p: "/12/456", idx: 6, eof: true},
-		{p: "/:123/456/", idx: 9, eof: true},
-		{p: "/123/4/56", idx: 8, eof: true},
-		//todo: add regex path
+		{p: "/123/", idx: 4, eof: true},
+		{p: "123/", idx: 3, eof: true},
+		{p: "/{abc}", idx: 0, eof: false},
+		{p: "/{abc}/", idx: 0, eof: false},
+		{p: "{abc}/", idx: 5, eof: true},
+		{p: "/123{abc}", idx: 0, eof: false},
+		{p: "/123{abc}/", idx: 0, eof: false},
+		{p: "123{abc}/", idx: 8, eof: true},
+		{p: "/{abc}/123", idx: 0, eof: false},
+		{p: "/{abc}/123/", idx: 0, eof: false},
+		{p: "{abc}/123", idx: 5, eof: false},
+		{p: "{abc}/123/", idx: 5, eof: false},
+		{p: "/123{abc}/123", idx: 0, eof: false},
+		{p: "/123{abc}/123/", idx: 0, eof: false},
+		{p: "123{abc}/123", idx: 8, eof: false},
+		{p: "123{abc}/123/", idx: 8, eof: false},
+		{p: "/123/{abc}", idx: 4, eof: false},
+		{p: "/123/{abc}/", idx: 4, eof: false},
+		{p: "123/{abc}", idx: 3, eof: false},
+		{p: "123/{abc}/", idx: 3, eof: false},
+		{p: "/123/123{abc}", idx: 4, eof: false},
+		{p: "/123/123{abc}/", idx: 4, eof: false},
+		{p: "123/123{abc}", idx: 3, eof: false},
+		{p: "123/123{abc}/", idx: 3, eof: false},
 	}
 	for _, tc := range tcs {
 		idx, eof := parsePrefix(tc.p)
