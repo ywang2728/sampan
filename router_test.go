@@ -212,39 +212,39 @@ func TestParseExps(t *testing.T) {
 }
 func TestParsePrefix(t *testing.T) {
 	tcs := []struct {
-		p   string
-		idx int
-		eof bool
+		path string
+		idx  int
+		eof  bool
 	}{
-		{p: "/", idx: 0, eof: true},
-		{p: "/123", idx: 3, eof: true},
-		{p: "/123/", idx: 4, eof: true},
-		{p: "123/", idx: 3, eof: true},
-		{p: "/{abc}", idx: 0, eof: false},
-		{p: "/{abc}/", idx: 0, eof: false},
-		{p: "{abc}/", idx: 5, eof: true},
-		{p: "/123{abc}", idx: 0, eof: false},
-		{p: "/123{abc}/", idx: 0, eof: false},
-		{p: "123{abc}/", idx: 8, eof: true},
-		{p: "/{abc}/123", idx: 0, eof: false},
-		{p: "/{abc}/123/", idx: 0, eof: false},
-		{p: "{abc}/123", idx: 5, eof: false},
-		{p: "{abc}/123/", idx: 5, eof: false},
-		{p: "/123{abc}/123", idx: 0, eof: false},
-		{p: "/123{abc}/123/", idx: 0, eof: false},
-		{p: "123{abc}/123", idx: 8, eof: false},
-		{p: "123{abc}/123/", idx: 8, eof: false},
-		{p: "/123/{abc}", idx: 4, eof: false},
-		{p: "/123/{abc}/", idx: 4, eof: false},
-		{p: "123/{abc}", idx: 3, eof: false},
-		{p: "123/{abc}/", idx: 3, eof: false},
-		{p: "/123/123{abc}", idx: 4, eof: false},
-		{p: "/123/123{abc}/", idx: 4, eof: false},
-		{p: "123/123{abc}", idx: 3, eof: false},
-		{p: "123/123{abc}/", idx: 3, eof: false},
+		{path: "/", idx: 0, eof: true},
+		{path: "/123", idx: 3, eof: true},
+		{path: "/123/", idx: 4, eof: true},
+		{path: "123/", idx: 3, eof: true},
+		{path: "/{abc}", idx: 0, eof: false},
+		{path: "/{abc}/", idx: 0, eof: false},
+		{path: "{abc}/", idx: 5, eof: true},
+		{path: "/123{abc}", idx: 0, eof: false},
+		{path: "/123{abc}/", idx: 0, eof: false},
+		{path: "123{abc}/", idx: 8, eof: true},
+		{path: "/{abc}/123", idx: 0, eof: false},
+		{path: "/{abc}/123/", idx: 0, eof: false},
+		{path: "{abc}/123", idx: 5, eof: false},
+		{path: "{abc}/123/", idx: 5, eof: false},
+		{path: "/123{abc}/123", idx: 0, eof: false},
+		{path: "/123{abc}/123/", idx: 0, eof: false},
+		{path: "123{abc}/123", idx: 8, eof: false},
+		{path: "123{abc}/123/", idx: 8, eof: false},
+		{path: "/123/{abc}", idx: 4, eof: false},
+		{path: "/123/{abc}/", idx: 4, eof: false},
+		{path: "123/{abc}", idx: 3, eof: false},
+		{path: "123/{abc}/", idx: 3, eof: false},
+		{path: "/123/123{abc}", idx: 4, eof: false},
+		{path: "/123/123{abc}/", idx: 4, eof: false},
+		{path: "123/123{abc}", idx: 3, eof: false},
+		{path: "123/123{abc}/", idx: 3, eof: false},
 	}
 	for _, tc := range tcs {
-		idx, eof := parsePrefix(tc.p)
+		idx, eof := parsePrefix(tc.path)
 		assert.Equal(t, tc.idx, idx)
 		assert.Equal(t, tc.eof, eof)
 	}
@@ -277,7 +277,6 @@ func TestNewNode(t *testing.T) {
 			}
 		}
 		assert.NotNil(t, n.children)
-		assert.Nil(t, n.params)
 		assert.Nil(t, n.handler)
 	}
 }
@@ -312,6 +311,62 @@ func TestRadixString(t *testing.T) {
 	r.root.children["hello"] = newNode("hello")
 	r.size = 2
 	fmt.Println(r)
+}
+
+func TestRadixPutRecNewSinglePlainTextPath(t *testing.T) {
+	tcs := []struct {
+		path string
+		part string
+	}{
+		{path: "/", part: "/"},
+		{path: "/123", part: "/123"},
+		{path: "/123/", part: "/123/"},
+		{path: "123/", part: "123/"},
+	}
+	for _, tc := range tcs {
+		r := newRadix()
+		n := r.putRec(nil, tc.path)
+		assert.NotNil(t, n)
+		assert.Equal(t, tc.part, n.part)
+	}
+}
+
+func TestRadixPutRecNewSingleRegexPath(t *testing.T) {
+	tcs := []struct {
+		path   string
+		part   string
+		expKey string
+		expStr string
+	}{
+		{path: "{abc}/", part: "{abc}/", expKey: "abc", expStr: `\S*`},
+		{path: "123{abc}/", part: "123{abc}/", expKey: "abc", expStr: `\S*`},
+	}
+	for _, tc := range tcs {
+		r := newRadix()
+		n := r.putRec(nil, tc.path)
+		assert.NotNil(t, n)
+		assert.Equal(t, tc.part, n.part)
+		assert.Equal(t, 1, len(n.exps))
+		assert.Equal(t, tc.expStr, n.exps[tc.expKey].String())
+	}
+}
+
+func TestRadixPutRecNewMultipleRegexPath(t *testing.T) {
+	tcs := []struct {
+		path  string
+		nodes []map[string]string
+	}{
+		{path: "{abc}/", part: "{abc}/", expKey: "abc", expStr: `\S*`},
+		{path: "123{abc}/", part: "123{abc}/", expKey: "abc", expStr: `\S*`},
+	}
+	for _, tc := range tcs {
+		r := newRadix()
+		n := r.putRec(nil, tc.path)
+		assert.NotNil(t, n)
+		assert.Equal(t, tc.part, n.part)
+		assert.Equal(t, 1, len(n.exps))
+		assert.Equal(t, tc.expStr, n.exps[tc.expKey].String())
+	}
 }
 
 func TestNewRouter(t *testing.T) {

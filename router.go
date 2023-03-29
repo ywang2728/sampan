@@ -19,7 +19,6 @@ type (
 		path    string
 		part    string
 		exps    map[string]*regexp.Regexp
-		params  map[string]string
 		handler func(*Context)
 		//store non-regex nodes by first segment of tail of path as map key.
 		children map[string]*node
@@ -399,7 +398,6 @@ func (r *radix) putRec(n *node, p string) (t *node) {
 			if child := r.putRec(nil, p[idx+1:]); len(child.exps) > 0 {
 				t.reChildren = append(t.reChildren, child)
 			} else {
-				//TODO: check only root path
 				key, ok := strings.CutSuffix(child.part, "/")
 				if ok {
 					t.children[key] = child
