@@ -1,6 +1,7 @@
 package sampan
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
@@ -136,34 +137,60 @@ func TestLruGet(t *testing.T) {
 	}
 }
 
-/*func TestLcp(t *testing.T) {
-	cases := []struct {
+func TestLruDelete(t *testing.T) {
+	for _, tc := range LruTcs {
+		l := newLru(tc.cap)
+		size := tc.cap
+		if len(tc.nodes) < tc.cap {
+			size = len(tc.nodes)
+		}
+		for i := 0; i < size; i++ {
+			ele := l.nodes.PushBack(&tc.nodes[i])
+			l.paths[tc.nodes[i].path] = ele
+
+		}
+		for i := 0; i < size; i++ {
+			l.delete(tc.nodes[i].path)
+		}
+		assert.Equal(t, 0, l.len())
+	}
+}
+
+func TestLcp(t *testing.T) {
+	tcs := []struct {
 		s1  string
 		s2  string
 		idx int
+		cp  string
 	}{
-		{s1: "/", s2: "1", idx: -1},
-		{s1: "/1", s2: "1", idx: -1},
-		{s1: "/1/", s2: "/2/", idx: 0},
-		{s1: "/", s2: "/", idx: 0},
-		{s1: "/", s2: "/123", idx: 0},
-		{s1: "/123", s2: "/", idx: 0},
-		{s1: "/12/456", s2: "/12/567", idx: 3},
-		{s1: "/12/456", s2: "/12/456/", idx: 3},
-		{s1: "/:123/456", s2: "/*123/567", idx: 0},
-		{s1: "/123/4/56", s2: "/123/4/57", idx: 6},
-		{s1: "/123/4/5/6", s2: "/123/4/5/7", idx: 8},
-		{s1: "/123/4/56/", s2: "/123/4/56", idx: 6},
+		{s1: "/", s2: "1", idx: -1, cp: ""},
+		{s1: "/", s2: "/", idx: 0, cp: "/"},
+		{s1: "/1", s2: "1", idx: -1, cp: ""},
+		{s1: "/1", s2: "/1", idx: 0, cp: "/1"},
+		{s1: "/1/", s2: "/2/", idx: 0, cp: "/"},
+		{s1: "/1/", s2: "/1/", idx: 2, cp: "/1/"},
+		{s1: "/1/2/", s2: "/1/2", idx: 2, cp: "/1/2"},
+		{s1: "/", s2: "/", idx: 0, cp: "/"},
+		{s1: "/", s2: "/123", idx: 0, cp: "/"},
+		{s1: "/123", s2: "/", idx: 0, cp: "/"},
+		{s1: "/12/456", s2: "/12/567", idx: 3, cp: "/12/"},
+		{s1: "/12/456", s2: "/12/456/", idx: 3, cp: "/12/456"},
+		{s1: "/:123/456", s2: "/*123/567", idx: 0, cp: "/"},
+		{s1: "/123/4/56", s2: "/123/4/57", idx: 6, cp: "/123/4/"},
+		{s1: "/123/4/5/6", s2: "/123/4/5/7", idx: 8, cp: "/123/4/5/"},
+		{s1: "/123/4/56/", s2: "/123/4/56", idx: 6, cp: "/123/4/56"},
+		{s1: "/123/4/56/", s2: "/123/4/56/", idx: 9, cp: "/123/4/56/"},
+		{s1: "/123/4/56", s2: "/123/4/56", idx: 6, cp: "/123/4/56"},
 	}
-	asst := assert.New(t)
-
-	for _, tc := range cases {
-		asst.Equal(tc.idx, lcp(&tc.s1, &tc.s2))
+	for _, tc := range tcs {
+		cp, idx := commonPrefix(tc.s1, tc.s2)
+		assert.Equal(t, tc.idx, idx)
+		assert.Equal(t, tc.cp, cp)
 	}
-}*/
+}
 
 func TestParseExps(t *testing.T) {
-	cases := []struct {
+	tcs := []struct {
 		part string
 		exps []string
 		cnt  int
@@ -178,14 +205,36 @@ func TestParseExps(t *testing.T) {
 		{part: "123-{abc:[a-z]{3-5}}-567-{haha:\\w+}--world/", exps: []string{"abc:[a-z]{3-5}", "haha:\\w+"}, cnt: 2},
 		{part: "123-{abc:[a-z]{3-5}}-567-{haha:\\w+}--world++{a1:[0-9][0-9]?}ll/", exps: []string{"abc:[a-z]{3-5}", "haha:\\w+", "a1:[0-9][0-9]?"}, cnt: 3},
 	}
-	for _, tc := range cases {
+	for _, tc := range tcs {
 		assert.Equal(t, len(parseExps(tc.part)), tc.cnt)
 		assert.Equal(t, parseExps(tc.part), tc.exps)
 	}
 }
+func TestParsePrefix(t *testing.T) {
+	tcs := []struct {
+		p   string
+		idx int
+		eof bool
+	}{
+		{p: "/", idx: 0, eof: true},
+		{p: "/1", idx: 1, eof: true},
+		{p: "/1/", idx: 2, eof: true},
+		{p: "/1/2/", idx: 4, eof: true},
+		{p: "/123", idx: 3, eof: true},
+		{p: "/12/456", idx: 6, eof: true},
+		{p: "/:123/456/", idx: 9, eof: true},
+		{p: "/123/4/56", idx: 8, eof: true},
+		//todo: add regex path
+	}
+	for _, tc := range tcs {
+		idx, eof := parsePrefix(tc.p)
+		assert.Equal(t, tc.idx, idx)
+		assert.Equal(t, tc.eof, eof)
+	}
+}
 
 func TestNewNode(t *testing.T) {
-	cases := []struct {
+	tcs := []struct {
 		part    string
 		expKeys []string
 		exps    map[string]string
@@ -198,7 +247,7 @@ func TestNewNode(t *testing.T) {
 		{part: "hello-{abc:[a-z]+}!/", exps: map[string]string{"abc": `[a-z]+`}},
 		{part: "hello-{abc:[a-z]+}!=bonjour-{def:[\\d][\\w]*}/", exps: map[string]string{"abc": `[a-z]+`, "def": "[\\d][\\w]*"}},
 	}
-	for _, tc := range cases {
+	for _, tc := range tcs {
 		n := newNode(tc.part)
 		assert.Empty(t, n.path)
 		assert.Equal(t, tc.part, n.part)
@@ -219,6 +268,33 @@ func TestNewNode(t *testing.T) {
 func TestNewRadix(t *testing.T) {
 	r := newRadix()
 	assert.NotNil(t, r)
+}
+
+func TestRadixClear(t *testing.T) {
+	r := newRadix()
+	r.root = newNode("/")
+	r.size++
+	assert.Equal(t, 1, r.len())
+	r.clear()
+	assert.Equal(t, 0, r.len())
+}
+
+func TestRadixLen(t *testing.T) {
+	r := newRadix()
+	r.root = newNode("/")
+	r.size++
+	assert.Equal(t, 1, r.len())
+	r.root.children["hello"] = newNode("hello")
+	r.size++
+	assert.Equal(t, 2, r.len())
+}
+
+func TestRadixString(t *testing.T) {
+	r := newRadix()
+	r.root = newNode("/")
+	r.root.children["hello"] = newNode("hello")
+	r.size = 2
+	fmt.Println(r)
 }
 
 func TestNewRouter(t *testing.T) {

@@ -3,6 +3,7 @@ package sampan
 import (
 	"container/list"
 	"errors"
+	"fmt"
 	"log"
 	"regexp"
 	"strings"
@@ -15,12 +16,15 @@ const (
 
 type (
 	node struct {
-		path     string
-		part     string
-		exps     map[string]*regexp.Regexp
-		params   map[string]string
-		handler  func(*Context)
+		path    string
+		part    string
+		exps    map[string]*regexp.Regexp
+		params  map[string]string
+		handler func(*Context)
+		//store non-regex nodes by first segment of tail of path as map key.
 		children map[string]*node
+		//store regex nodes, keep the insert order for seeking.
+		reChildren []*node
 	}
 
 	lruNode struct {
@@ -46,25 +50,6 @@ type (
 		trees map[string]*radix
 	}
 )
-
-func splitPath(path string) (parts []string) {
-	part := strings.Builder{}
-	for i, t := 0, 0; i < len(path); i++ {
-		part.WriteString(string(path[i]))
-		if path[i] == '{' {
-			t++
-		} else if path[i] == '}' {
-			t--
-		} else if path[i] == '/' && t == 0 {
-			parts = append(parts, part.String())
-			part.Reset()
-		}
-	}
-	if part.Len() > 0 {
-		parts = append(parts, part.String())
-	}
-	return
-}
 
 func newLru(cap int) *lru {
 	return &lru{
@@ -159,9 +144,65 @@ func parseExps(part string) (matches []string) {
 	return
 }
 
+func splitPath(path string) (parts []string) {
+	part := strings.Builder{}
+	for i, t := 0, 0; i < len(path); i++ {
+		part.WriteString(string(path[i]))
+		if path[i] == '{' {
+			t++
+		} else if path[i] == '}' {
+			t--
+		} else if path[i] == '/' && t == 0 {
+			parts = append(parts, part.String())
+			part.Reset()
+		}
+	}
+	if part.Len() > 0 {
+		parts = append(parts, part.String())
+	}
+	return
+}
+
+// parse the prefix from path for one node base on the difference of regex segment and plain text segment.
+func parsePrefix(p string) (idx int, eof bool) {
+	if i, lp := 0, len(p); strings.Contains(p, "{") {
+		if strings.Contains(p[:strings.Index(p, "/")], "{") {
+			for flag := 0; i < lp; i++ {
+				if p[i] == '{' {
+					flag++
+				} else if p[i] == '}' {
+					flag--
+				} else if p[i] == '/' && flag == 0 {
+					idx = i
+					break
+				}
+			}
+		} else {
+			for i < lp {
+				switch p[i] {
+				case '/':
+					idx = i
+				case '{':
+					break
+				}
+				i++
+			}
+		}
+		if i == lp {
+			idx = lp - 1
+			eof = true
+		}
+	} else {
+		idx = lp - 1
+		eof = true
+	}
+	return
+}
+
 func newNode(part string) (n *node) {
 	n = &node{
-		children: make(map[string]*node),
+		children:   make(map[string]*node),
+		reChildren: make([]*node, 0),
 	}
 	if len(part) > 0 {
 		n.part = part
@@ -176,6 +217,32 @@ func newNode(part string) (n *node) {
 				}
 			}
 		}
+	}
+	return
+}
+
+// find the longest common prefix from the index position by "/", wildcard will be considered as different part and be treated as single node.
+func commonPrefix(s1, s2 string) (p string, s int) {
+	l1, l2 := len(s1), len(s2)
+	min := l1
+	if min > l2 {
+		min = l2
+	}
+	s = -1
+	i := 0
+	for i < min {
+		if s1[i] != s2[i] {
+			break
+		}
+		if s1[i] == '/' {
+			s = i
+		}
+		i++
+	}
+	if i == min {
+		p = s1[0:min]
+	} else {
+		p = s1[0 : s+1]
 	}
 	return
 }
@@ -303,26 +370,80 @@ func (r *radix) len() int {
 	return r.size
 }
 
+func (r *radix) stringRec(n *node, l int) string {
+	output := strings.Builder{}
+	output.WriteString(strings.Repeat("#", l))
+	output.WriteString(fmt.Sprintf("part: %s, path: %s\n", n.part, n.path))
+	for _, child := range n.children {
+		output.WriteString(r.stringRec(child, l+1))
+	}
+	return output.String()
+}
+
+func (r *radix) String() string {
+	return r.stringRec(r.root, 0)
+}
+
 // Add path(p) from node(n), if n is nil, insert directly on n, otherwise compare n's path with p, find common prefix,
 // if prefix is part of n, split n's path with creating new n, and update current n's path with rest of prefix and add as new n's child.
 // then create new node with the rest of p, add as new n's child.
 // wildcard segment will be considered as single node.
-func (r *radix) putRec(n *node, p string) (nr, t *node) {
-	return nil, nil
+func (r *radix) putRec(n *node, p string) (t *node) {
+	//put whole path in new node if path is plain text, otherwise parse path to take the plain text part or single regex part
+	if n == nil {
+		if idx, eof := parsePrefix(p); eof {
+			// the whole tail path in new node
+			t = newNode(p)
+		} else {
+			// put prefix in new node and the tail in the child level nodes.
+			t = newNode(p[:idx+1])
+			if child := r.putRec(nil, p[idx+1:]); len(child.exps) > 0 {
+				t.reChildren = append(t.reChildren, child)
+			} else {
+				//TODO: check only root path
+				key, ok := strings.CutSuffix(child.part, "/")
+				if ok {
+					t.children[key] = child
+				}
+			}
+		}
+		return
+	}
+	ln, lp := len(n.part), len(p)
+	if len(n.exps) == 0 {
+		min := ln
+		if min > lp {
+			min = lp
+		}
+
+		i := 0
+		for i < min {
+			if n.part[i] != p[i] {
+				break
+			}
+			if n.part[i] == '/' {
+
+			}
+			i++
+		}
+
+	} else {
+
+	}
+	return nil
 }
 
 func (r *radix) put(path string, handler func(*Context)) (b bool) {
-	if r == nil {
-		return false
-	}
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	var t *node
-	r.root, t = r.putRec(r.root, path)
-	if t != nil && len(t.path) == 0 {
+	if t := r.putRec(r.root, path); t != nil && len(t.path) == 0 {
+		if r.root == nil {
+			r.root = t
+		}
 		t.path = path
 		t.handler = handler
 		r.size++
+		b = true
 	}
 	return
 }
@@ -332,9 +453,6 @@ func (r *radix) getRec(n *node, p string) (t *node) {
 }
 
 func (r *radix) get(path string) func(*Context) {
-	if r == nil {
-		return nil
-	}
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 	n := r.cache.get(path)
@@ -357,9 +475,6 @@ func (r *radix) deleteRec(n *node, p string) (b bool) {
 }
 
 func (r *radix) delete(path string) (b bool) {
-	if r == nil {
-		return false
-	}
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	if r.deleteRec(r.root, path) {
