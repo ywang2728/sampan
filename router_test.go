@@ -13,25 +13,25 @@ var (
 		nodes []lruNode
 	}{
 		{cap: 0, nodes: []lruNode{}},
-		{cap: 1, nodes: []lruNode{{path: "/", node: &node{path: "/"}}}},
-		{cap: 3, nodes: []lruNode{{path: "/", node: &node{path: "/"}}}},
+		{cap: 1, nodes: []lruNode{{path: "/", node: &node{part: "/"}}}},
+		{cap: 3, nodes: []lruNode{{path: "/", node: &node{part: "/"}}}},
 		{cap: 2, nodes: []lruNode{
-			{path: "/", node: &node{path: "/"}},
-			{path: "/hello", node: &node{path: "/hello"}}}},
+			{path: "/", node: &node{part: "/"}},
+			{path: "/hello", node: &node{part: "/hello"}}}},
 		{cap: 1, nodes: []lruNode{
-			{path: "/", node: &node{path: "/"}},
-			{path: "/hello", node: &node{path: "/hello"}}}},
+			{path: "/", node: &node{part: "/"}},
+			{path: "/hello", node: &node{part: "/hello"}}}},
 		{cap: 1, nodes: []lruNode{
-			{path: "/", node: &node{path: "/"}},
-			{path: "/hello", node: &node{path: "/hello"}}}},
+			{path: "/", node: &node{part: "/"}},
+			{path: "/hello", node: &node{part: "/hello"}}}},
 		{cap: 1, nodes: []lruNode{
-			{path: "/", node: &node{path: "/"}},
-			{path: "/hello", node: &node{path: "/hello"}},
-			{path: "/world", node: &node{path: "/world"}}}},
+			{path: "/", node: &node{part: "/"}},
+			{path: "/hello", node: &node{part: "/hello"}},
+			{path: "/world", node: &node{part: "/world"}}}},
 		{cap: 2, nodes: []lruNode{
-			{path: "/", node: &node{path: "/"}},
-			{path: "/hello", node: &node{path: "/hello"}},
-			{path: "/world", node: &node{path: "/world"}}}},
+			{path: "/", node: &node{part: "/"}},
+			{path: "/hello", node: &node{part: "/hello"}},
+			{path: "/world", node: &node{part: "/world"}}}},
 	}
 )
 
@@ -111,7 +111,7 @@ func TestLruPut(t *testing.T) {
 		}
 		assert.Equal(t, size, l.len())
 		for i := 1; i <= size; i++ {
-			assert.Equal(t, tc.nodes[len(tc.nodes)-i].node.path, l.nodes.Remove(l.nodes.Front()).(*lruNode).node.path)
+			assert.Equal(t, tc.nodes[len(tc.nodes)-i].node.part, l.nodes.Remove(l.nodes.Front()).(*lruNode).node.part)
 		}
 	}
 }
@@ -131,7 +131,7 @@ func TestLruGet(t *testing.T) {
 		assert.Equal(t, size, l.len())
 		for i := 0; i < size; i++ {
 			n := l.get(tc.nodes[i].path)
-			assert.Equal(t, tc.nodes[i].path, n.path)
+			assert.Equal(t, tc.nodes[i].path, n.part)
 			assert.Equal(t, tc.nodes[i].path, l.nodes.Front().Value.(*lruNode).path)
 		}
 	}
@@ -269,7 +269,6 @@ func TestNewNode(t *testing.T) {
 	}
 	for _, tc := range tcs {
 		n := newNode(tc.part)
-		assert.Empty(t, n.path)
 		assert.Equal(t, tc.part, n.part)
 		if tc.exps == nil {
 			assert.Nil(t, n.exps)
@@ -328,7 +327,7 @@ func TestRadixPutRecNewSinglePlainTextPath(t *testing.T) {
 	}
 	for _, tc := range tcs {
 		r := newRadix()
-		n := r.putRec(nil, tc.path)
+		n := r.putRec(nil, tc.path, func(context *Context) {})
 		assert.NotNil(t, n)
 		assert.Equal(t, tc.part, n.part)
 	}
@@ -346,7 +345,7 @@ func TestRadixPutRecNewSingleRegexPath(t *testing.T) {
 	}
 	for _, tc := range tcs {
 		r := newRadix()
-		n := r.putRec(nil, tc.path)
+		n := r.putRec(nil, tc.path, func(context *Context) {})
 		assert.NotNil(t, n)
 		assert.Equal(t, tc.part, n.part)
 		assert.Equal(t, 1, len(n.exps))
@@ -366,7 +365,8 @@ func TestRadixPutRecNewMultipleRegexPath(t *testing.T) {
 	}
 	for _, tc := range tcs {
 		r := newRadix()
-		n := r.putRec(nil, tc.path)
+		handler := func(ctx *Context) {}
+		n := r.putRec(nil, tc.path, handler)
 		assert.NotNil(t, n)
 		assert.Equal(t, tc.part, n.part)
 		r.root = n

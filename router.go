@@ -16,7 +16,6 @@ const (
 
 type (
 	node struct {
-		path    string
 		part    string
 		exps    map[string]*regexp.Regexp
 		handler func(*Context)
@@ -100,24 +99,24 @@ func (l *lru) delete(path string) {
 }
 
 // parse the prefix from path for one node base on the difference of regex segment and plain text segment.
-func parsePrefix(p string) (idx int, eof bool) {
-	if i, lp := 0, len(p); strings.Contains(p, "/") && strings.Contains(p, "{") {
-		if strings.Contains(p[:strings.Index(p, "/")], "{") {
+func parsePrefix(path string) (idx int, eof bool) {
+	if i, lp := 0, len(path); strings.Contains(path, "/") && strings.Contains(path, "{") {
+		if strings.Contains(path[:strings.Index(path, "/")], "{") {
 			for cnt := 0; i < lp; i++ {
-				if p[i] == '{' {
+				if path[i] == '{' {
 					cnt++
-				} else if p[i] == '}' {
+				} else if path[i] == '}' {
 					cnt--
-				} else if p[i] == '/' && cnt == 0 {
+				} else if path[i] == '/' && cnt == 0 {
 					idx = i
 					break
 				}
 			}
 		} else {
 			for i < lp {
-				if p[i] == '/' {
+				if path[i] == '/' {
 					idx = i
-				} else if p[i] == '{' {
+				} else if path[i] == '{' {
 					break
 				}
 				i++
@@ -371,7 +370,7 @@ func (r *radix) len() int {
 func (r *radix) stringRec(n *node, l int) string {
 	output := strings.Builder{}
 	output.WriteString(strings.Repeat("#", l))
-	output.WriteString(fmt.Sprintf("%+v\n", n))
+	output.WriteString(fmt.Sprintf(" %p : %+v\n", n, n))
 	for _, child := range n.children {
 		output.WriteString(r.stringRec(child, l+1))
 	}
@@ -389,25 +388,28 @@ func (r *radix) String() string {
 // if prefix is part of n, split n's path with creating new n, and update current n's path with rest of prefix and add as new n's child.
 // then create new node with the rest of p, add as new n's child.
 // wildcard segment will be considered as single node.
-func (r *radix) putRec(n *node, p string) (t *node) {
+func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *node) {
 	//put whole path in new node if path is plain text, otherwise parse path to take the plain text part or single regex part
 	if n == nil {
-		if idx, eof := parsePrefix(p); eof {
+		if idx, eof := parsePrefix(path); eof {
 			// the whole tail path in new node
-			t = newNode(p)
+			t = newNode(path)
 		} else {
 			// put prefix in new node and the tail in the child level nodes.
-			t = newNode(p[:idx+1])
-			if child := r.putRec(nil, p[idx+1:]); len(child.exps) > 0 {
-				t.reChildren = append(t.reChildren, child)
-			} else {
-				key, _ := strings.CutSuffix(child.part, "/")
-				t.children[key] = child
+			child := r.putRec(nil, path[idx+1:], handler)
+			if child != nil {
+				t = newNode(path[:idx+1])
+				if len(child.exps) > 0 {
+					t.reChildren = append(t.reChildren, child)
+				} else {
+					key, _ := strings.CutSuffix(child.part, "/")
+					t.children[key] = child
+				}
 			}
 		}
 		return
 	}
-	ln, lp := len(n.part), len(p)
+	ln, lp := len(n.part), len(path)
 	// Find common prefix between plain text node part and path,
 	if len(n.exps) == 0 {
 		min := ln
@@ -417,7 +419,7 @@ func (r *radix) putRec(n *node, p string) (t *node) {
 
 		i := 0
 		for i < min {
-			if n.part[i] != p[i] {
+			if n.part[i] != path[i] {
 				break
 			}
 			if n.part[i] == '/' {
@@ -435,13 +437,10 @@ func (r *radix) putRec(n *node, p string) (t *node) {
 func (r *radix) put(path string, handler func(*Context)) (b bool) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	if t := r.putRec(r.root, path); t != nil && len(t.path) == 0 {
+	if t := r.putRec(r.root, path, handler); t != nil {
 		if r.root == nil {
 			r.root = t
 		}
-		t.path = path
-		t.handler = handler
-		r.size++
 		b = true
 	}
 	return
