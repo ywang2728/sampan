@@ -371,9 +371,12 @@ func (r *radix) len() int {
 func (r *radix) stringRec(n *node, l int) string {
 	output := strings.Builder{}
 	output.WriteString(strings.Repeat("#", l))
-	output.WriteString(fmt.Sprintf("part: %s, path: %s\n", n.part, n.path))
+	output.WriteString(fmt.Sprintf("%+v\n", n))
 	for _, child := range n.children {
 		output.WriteString(r.stringRec(child, l+1))
+	}
+	for _, reChild := range n.reChildren {
+		output.WriteString(r.stringRec(reChild, l+1))
 	}
 	return output.String()
 }
@@ -398,10 +401,8 @@ func (r *radix) putRec(n *node, p string) (t *node) {
 			if child := r.putRec(nil, p[idx+1:]); len(child.exps) > 0 {
 				t.reChildren = append(t.reChildren, child)
 			} else {
-				key, ok := strings.CutSuffix(child.part, "/")
-				if ok {
-					t.children[key] = child
-				}
+				key, _ := strings.CutSuffix(child.part, "/")
+				t.children[key] = child
 			}
 		}
 		return

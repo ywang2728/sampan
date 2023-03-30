@@ -360,13 +360,17 @@ func TestRadixPutRecNewMultipleRegexPath(t *testing.T) {
 		part  string
 		nodes []map[string]string
 	}{
-		{path: "/123/{abc}/", part: "/123/", nodes: []map[string]string{{"part": "{abc}/", "expKey": "abc", "expStr": `\S*`}}},
+		//{path: "/123/{abc}", part: "/123/", nodes: []map[string]string{{"part": "{abc}/", "expKey": "abc", "expStr": `\S*`}}},
+		{path: "/123/{abc}/def/", part: "/123/", nodes: []map[string]string{{"part": "{abc}/", "expKey": "abc", "expStr": `\S*`}}},
+		//{path: "/123/{abc}/456/", part: "/123/", nodes: []map[string]string{{"part": "{abc}/", "expKey": "abc", "expStr": `\S*`}}},
 	}
 	for _, tc := range tcs {
 		r := newRadix()
 		n := r.putRec(nil, tc.path)
 		assert.NotNil(t, n)
 		assert.Equal(t, tc.part, n.part)
+		r.root = n
+		fmt.Println(r)
 	}
 }
 
