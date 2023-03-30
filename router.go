@@ -388,18 +388,13 @@ func (r *radix) String() string {
 // wildcard segment will be considered as single node.
 func (r *radix) putRec(n *node, p string) (t *node) {
 	//put whole path in new node if path is plain text, otherwise parse path to take the plain text part or single regex part
-	fmt.Println("++++++++++++++++")
-	fmt.Println(p)
 	if n == nil {
 		if idx, eof := parsePrefix(p); eof {
 			// the whole tail path in new node
-			fmt.Println("idx(end):", idx)
 			t = newNode(p)
 		} else {
 			// put prefix in new node and the tail in the child level nodes.
-			fmt.Println("idx:", idx)
 			t = newNode(p[:idx+1])
-			fmt.Println("node:", t)
 			if child := r.putRec(nil, p[idx+1:]); len(child.exps) > 0 {
 				t.reChildren = append(t.reChildren, child)
 			} else {
