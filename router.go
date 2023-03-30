@@ -101,7 +101,7 @@ func (l *lru) delete(path string) {
 
 // parse the prefix from path for one node base on the difference of regex segment and plain text segment.
 func parsePrefix(p string) (idx int, eof bool) {
-	if i, lp := 0, len(p); strings.Contains(p, "{") {
+	if i, lp := 0, len(p); strings.Contains(p, "/") && strings.Contains(p, "{") {
 		if strings.Contains(p[:strings.Index(p, "/")], "{") {
 			for cnt := 0; i < lp; i++ {
 				if p[i] == '{' {
@@ -388,13 +388,18 @@ func (r *radix) String() string {
 // wildcard segment will be considered as single node.
 func (r *radix) putRec(n *node, p string) (t *node) {
 	//put whole path in new node if path is plain text, otherwise parse path to take the plain text part or single regex part
+	fmt.Println("++++++++++++++++")
+	fmt.Println(p)
 	if n == nil {
 		if idx, eof := parsePrefix(p); eof {
 			// the whole tail path in new node
+			fmt.Println("idx(end):", idx)
 			t = newNode(p)
 		} else {
 			// put prefix in new node and the tail in the child level nodes.
+			fmt.Println("idx:", idx)
 			t = newNode(p[:idx+1])
+			fmt.Println("node:", t)
 			if child := r.putRec(nil, p[idx+1:]); len(child.exps) > 0 {
 				t.reChildren = append(t.reChildren, child)
 			} else {
@@ -407,6 +412,7 @@ func (r *radix) putRec(n *node, p string) (t *node) {
 		return
 	}
 	ln, lp := len(n.part), len(p)
+	// Find common prefix between plain text node part and path,
 	if len(n.exps) == 0 {
 		min := ln
 		if min > lp {
@@ -424,7 +430,7 @@ func (r *radix) putRec(n *node, p string) (t *node) {
 			i++
 		}
 
-	} else {
+	} else { // Find common prefix between regex node part and path
 
 	}
 	return nil

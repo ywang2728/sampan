@@ -220,12 +220,15 @@ func TestParsePrefix(t *testing.T) {
 		{path: "/123", idx: 3, eof: true},
 		{path: "/123/", idx: 4, eof: true},
 		{path: "123/", idx: 3, eof: true},
+		{path: "123", idx: 2, eof: true},
 		{path: "/{abc}", idx: 0, eof: false},
 		{path: "/{abc}/", idx: 0, eof: false},
 		{path: "{abc}/", idx: 5, eof: true},
+		{path: "{abc}", idx: 4, eof: true},
 		{path: "/123{abc}", idx: 0, eof: false},
 		{path: "/123{abc}/", idx: 0, eof: false},
 		{path: "123{abc}/", idx: 8, eof: true},
+		{path: "123{abc}", idx: 7, eof: true},
 		{path: "/{abc}/123", idx: 0, eof: false},
 		{path: "/{abc}/123/", idx: 0, eof: false},
 		{path: "{abc}/123", idx: 5, eof: false},
@@ -354,18 +357,16 @@ func TestRadixPutRecNewSingleRegexPath(t *testing.T) {
 func TestRadixPutRecNewMultipleRegexPath(t *testing.T) {
 	tcs := []struct {
 		path  string
+		part  string
 		nodes []map[string]string
 	}{
-		{path: "{abc}/", part: "{abc}/", expKey: "abc", expStr: `\S*`},
-		{path: "123{abc}/", part: "123{abc}/", expKey: "abc", expStr: `\S*`},
+		{path: "/{abc}", part: "/", nodes: []map[string]string{{"part": "{abc}", "expKey": "abc", "expStr": `\S*`}}},
 	}
 	for _, tc := range tcs {
 		r := newRadix()
 		n := r.putRec(nil, tc.path)
 		assert.NotNil(t, n)
 		assert.Equal(t, tc.part, n.part)
-		assert.Equal(t, 1, len(n.exps))
-		assert.Equal(t, tc.expStr, n.exps[tc.expKey].String())
 	}
 }
 
