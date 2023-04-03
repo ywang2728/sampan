@@ -132,6 +132,23 @@ func parsePrefix(path string) (idx int, eof bool) {
 	}
 	return
 }
+func parseKey(path string) (idx int) {
+	i := 0
+	for cnt := 0; i < len(path); i++ {
+		if path[i] == '{' {
+			cnt++
+		} else if path[i] == '}' {
+			cnt--
+		} else if path[i] == '/' && cnt == 0 {
+			idx = i
+			break
+		}
+	}
+	if i == len(path) {
+		idx = i - 1
+	}
+	return
+}
 
 func parseExps(part string) (matches []string) {
 	expKeyRe := regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*$`)
@@ -250,101 +267,6 @@ func newRadix() *radix {
 	}
 }
 
-/*func (n *node) put(parts []string) (r *node, t *node) {
-	nl, pl := len(n.parts), len(parts)
-	min := nl
-	if pl < nl {
-		min = pl
-	}
-	dp := -1
-	for i := 0; i < min; i++ {
-		if n.parts[i] != parts[i] {
-			dp = i
-			break
-		}
-	}
-	if dp < 0 {
-		if nl == pl {
-			return n, n
-		} else if nl < pl {
-			if child, ok := n.children[parts[nl]]; ok {
-				return child.put(parts[nl:])
-			} else {
-				t = newNode(parts[nl:])
-				n.children[parts[nl]] = t
-				return n, t
-			}
-		} else {
-			r = newNode(parts)
-			n.parts = n.parts[pl:]
-			r.children[n.parts[pl]] = n
-			return r, r
-		}
-	} else {
-		r = newNode(n.parts[0:dp])
-		n.parts = n.parts[dp:]
-		r.children[n.parts[dp]] = n
-		t = newNode(parts[dp:])
-		r.children[parts[dp]] = t
-		return r, t
-	}
-}*/
-
-/*
-	func (n *node) get(path string) (t *node) {
-		nl, pl := len(n.part), len(path)
-		if nl > pl {
-			return nil
-		}
-		p := lcp(&n.part, &path)
-		if nl == pl {
-			if p != nl {
-				return nil
-			}
-			for i := 0; i < nl; i++ {
-				if n.parts[i] != parts[i] {
-					return nil
-				}
-			}
-			return n
-		}
-		if child, ok := n.children[parts[nl]]; ok {
-			for i := 0; i < nl; i++ {
-				if n.parts[i] != parts[i] {
-					return nil
-				}
-			}
-			return child.get(parts[nl:])
-		}
-		return nil
-	}
-
-	func (n *node) delete(parts []string) (b bool) {
-		if child, ok := n.children[parts[0]]; ok {
-			cl, pl := len(child.parts), len(parts)
-			if cl <= pl {
-				dp := -1
-				for i := 0; i < cl; i++ {
-					if child.parts[i] != parts[i] {
-						dp = i
-					}
-				}
-				if dp < 0 {
-					if len(child.children) == 0 {
-						delete(n.children, parts[0])
-						return true
-					}
-					return false
-				} else {
-					return child.delete(parts[dp:])
-				}
-			} else {
-				return false
-			}
-		}
-		return false
-	}
-*/
 func (r *radix) clear() {
 	if r != nil {
 		r.mutex.Lock()
@@ -389,11 +311,13 @@ func (r *radix) String() string {
 // then create new node with the rest of p, add as new n's child.
 // wildcard segment will be considered as single node.
 func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *node) {
+	fmt.Printf("++++++++++++: current node: %+v, path: %s, %p\n", n, path, handler)
 	//put whole path in new node if path is plain text, otherwise parse path to take the plain text part or single regex part
 	if n == nil {
 		if idx, eof := parsePrefix(path); eof {
 			// the whole tail path in new node
 			t = newNode(path)
+			t.handler = handler
 		} else {
 			// put prefix in new node and the tail in the child level nodes.
 			child := r.putRec(nil, path[idx+1:], handler)
@@ -402,36 +326,52 @@ func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *nod
 				if len(child.exps) > 0 {
 					t.reChildren = append(t.reChildren, child)
 				} else {
-					key, _ := strings.CutSuffix(child.part, "/")
-					t.children[key] = child
+					t.children[child.part[:parseKey(child.part)+1]] = child
 				}
 			}
 		}
-		return
-	}
-	ln, lp := len(n.part), len(path)
-	// Find common prefix between plain text node part and path,
-	if len(n.exps) == 0 {
+	} else {
+		ln, lp := len(n.part), len(path)
 		min := ln
 		if min > lp {
 			min = lp
 		}
-
-		i := 0
+		i, idx := 0, -1
 		for i < min {
 			if n.part[i] != path[i] {
 				break
 			}
 			if n.part[i] == '/' {
-
+				idx = i
 			}
 			i++
 		}
-
-	} else { // Find common prefix between regex node part and path
-
+		var tail *node
+		if i < lp {
+			//there is tail of path indeed, create new node for tail of new path
+			tail = r.putRec(nil, path[idx+1:], handler)
+		}
+		if i < ln {
+			//there is tail of node path indeed, create new node for both common prefix
+			t = r.putRec(nil, path[:idx+1], nil)
+			n.part = n.part[idx+1:]
+			t.children[n.part[:parseKey(n.part)+1]] = n
+			if i == lp {
+				t.handler = handler
+			}
+		} else {
+			t = n
+		}
+		if tail != nil {
+			if len(tail.exps) == 0 {
+				t.children[tail.part[:parseKey(tail.part)+1]] = tail
+			} else {
+				t.reChildren = append(t.reChildren, tail)
+			}
+		}
 	}
-	return nil
+	fmt.Printf("----------: current node: %+v, path: %s, %p\n\n", n, path, handler)
+	return
 }
 
 func (r *radix) put(path string, handler func(*Context)) (b bool) {

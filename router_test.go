@@ -253,6 +253,47 @@ func TestParsePrefix(t *testing.T) {
 	}
 }
 
+func TestParseKey(t *testing.T) {
+	tcs := []struct {
+		path string
+		idx  int
+	}{
+		{path: "/", idx: 0},
+		{path: "/123", idx: 0},
+		{path: "/123/", idx: 0},
+		{path: "123/", idx: 3},
+		{path: "123", idx: 2},
+		{path: "/{abc}", idx: 0},
+		{path: "/{abc}/", idx: 0},
+		{path: "{abc}/", idx: 5},
+		{path: "{abc}", idx: 4},
+		{path: "/123{abc}", idx: 0},
+		{path: "/123{abc}/", idx: 0},
+		{path: "123{abc}/", idx: 8},
+		{path: "123{abc}", idx: 7},
+		{path: "/{abc}/123", idx: 0},
+		{path: "/{abc}/123/", idx: 0},
+		{path: "{abc}/123", idx: 5},
+		{path: "{abc}/123/", idx: 5},
+		{path: "/123{abc}/123", idx: 0},
+		{path: "/123{abc}/123/", idx: 0},
+		{path: "123{abc}/123", idx: 8},
+		{path: "123{abc}/123/", idx: 8},
+		{path: "/123/{abc}", idx: 0},
+		{path: "/123/{abc}/", idx: 0},
+		{path: "123/{abc}", idx: 3},
+		{path: "123/{abc}/", idx: 3},
+		{path: "/123/123{abc}", idx: 0},
+		{path: "/123/123{abc}/", idx: 0},
+		{path: "123/123{abc}", idx: 3},
+		{path: "123/123{abc}/", idx: 3},
+	}
+	for _, tc := range tcs {
+		idx := parseKey(tc.path)
+		assert.Equal(t, tc.idx, idx)
+	}
+}
+
 func TestNewNode(t *testing.T) {
 	tcs := []struct {
 		part    string
@@ -359,9 +400,9 @@ func TestRadixPutRecNewMultipleRegexPath(t *testing.T) {
 		part  string
 		nodes []map[string]string
 	}{
-		//{path: "/123/{abc}", part: "/123/", nodes: []map[string]string{{"part": "{abc}/", "expKey": "abc", "expStr": `\S*`}}},
+		{path: "/123/{abc}", part: "/123/", nodes: []map[string]string{{"part": "{abc}/", "expKey": "abc", "expStr": `\S*`}}},
 		{path: "/123/{abc}/def/", part: "/123/", nodes: []map[string]string{{"part": "{abc}/", "expKey": "abc", "expStr": `\S*`}}},
-		//{path: "/123/{abc}/456/", part: "/123/", nodes: []map[string]string{{"part": "{abc}/", "expKey": "abc", "expStr": `\S*`}}},
+		{path: "/123/{abc}/456/", part: "/123/", nodes: []map[string]string{{"part": "{abc}/", "expKey": "abc", "expStr": `\S*`}}},
 	}
 	for _, tc := range tcs {
 		r := newRadix()
@@ -372,6 +413,31 @@ func TestRadixPutRecNewMultipleRegexPath(t *testing.T) {
 		r.root = n
 		fmt.Println(r)
 	}
+}
+
+func TestRadixPutRecPlainTextPaths(t *testing.T) {
+	tcs := []struct {
+		path    string
+		part    string
+		handler func(ctx *Context)
+		nodes   []map[string]string
+	}{
+		{path: "/123/", part: "/123/", handler: func(ctx *Context) {}, nodes: []map[string]string{{"part": "/123/"}}},
+		{path: "/123/abc", part: "abc", handler: func(ctx *Context) {}, nodes: []map[string]string{{"part": "abc"}}},
+		{path: "/123/def/", part: "def/", nodes: []map[string]string{{"part": "def/"}}},
+		//{path: "/123/def/ghi/", part: "ghi/", nodes: []map[string]string{{"part": "ghi/"}}},
+	}
+	r := newRadix()
+	for _, tc := range tcs {
+		var n *node
+		if n = r.putRec(r.root, tc.path, tc.handler); r.root == nil && n != nil {
+			r.root = n
+		}
+		assert.NotNil(t, n)
+		//assert.Equal(t, tc.part, n.part)
+	}
+	assert.NotNil(t, r)
+	fmt.Println(r)
 }
 
 func TestNewRouter(t *testing.T) {
