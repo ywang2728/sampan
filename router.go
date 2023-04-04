@@ -132,7 +132,7 @@ func parsePrefix(path string) (idx int, eof bool) {
 	}
 	return
 }
-func parseKey(path string) (idx int) {
+func parseKey(path string) (key string) {
 	i := 0
 	for cnt := 0; i < len(path); i++ {
 		if path[i] == '{' {
@@ -140,12 +140,12 @@ func parseKey(path string) (idx int) {
 		} else if path[i] == '}' {
 			cnt--
 		} else if path[i] == '/' && cnt == 0 {
-			idx = i
+			key = path[:i+1]
 			break
 		}
 	}
 	if i == len(path) {
-		idx = i - 1
+		key = path
 	}
 	return
 }
@@ -326,7 +326,7 @@ func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *nod
 				if len(child.exps) > 0 {
 					t.reChildren = append(t.reChildren, child)
 				} else {
-					t.children[child.part[:parseKey(child.part)+1]] = child
+					t.children[parseKey(child.part)] = child
 				}
 			}
 		}
@@ -349,13 +349,18 @@ func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *nod
 		var tail *node
 		if i < lp {
 			//there is tail of path indeed, create new node for tail of new path
-			tail = r.putRec(nil, path[idx+1:], handler)
+			tailPath := path[idx+1:]
+			if child, ok := n.children[parseKey(tailPath)]; ok {
+				tail = r.putRec(child, tailPath, handler)
+			} else {
+				tail = r.putRec(nil, path[idx+1:], handler)
+			}
 		}
 		if i < ln {
 			//there is tail of node path indeed, create new node for both common prefix
 			t = r.putRec(nil, path[:idx+1], nil)
 			n.part = n.part[idx+1:]
-			t.children[n.part[:parseKey(n.part)+1]] = n
+			t.children[parseKey(n.part)] = n
 			if i == lp {
 				t.handler = handler
 			}
@@ -364,7 +369,7 @@ func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *nod
 		}
 		if tail != nil {
 			if len(tail.exps) == 0 {
-				t.children[tail.part[:parseKey(tail.part)+1]] = tail
+				t.children[parseKey(tail.part)] = tail
 			} else {
 				t.reChildren = append(t.reChildren, tail)
 			}

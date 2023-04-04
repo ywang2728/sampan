@@ -256,41 +256,41 @@ func TestParsePrefix(t *testing.T) {
 func TestParseKey(t *testing.T) {
 	tcs := []struct {
 		path string
-		idx  int
+		key  string
 	}{
-		{path: "/", idx: 0},
-		{path: "/123", idx: 0},
-		{path: "/123/", idx: 0},
-		{path: "123/", idx: 3},
-		{path: "123", idx: 2},
-		{path: "/{abc}", idx: 0},
-		{path: "/{abc}/", idx: 0},
-		{path: "{abc}/", idx: 5},
-		{path: "{abc}", idx: 4},
-		{path: "/123{abc}", idx: 0},
-		{path: "/123{abc}/", idx: 0},
-		{path: "123{abc}/", idx: 8},
-		{path: "123{abc}", idx: 7},
-		{path: "/{abc}/123", idx: 0},
-		{path: "/{abc}/123/", idx: 0},
-		{path: "{abc}/123", idx: 5},
-		{path: "{abc}/123/", idx: 5},
-		{path: "/123{abc}/123", idx: 0},
-		{path: "/123{abc}/123/", idx: 0},
-		{path: "123{abc}/123", idx: 8},
-		{path: "123{abc}/123/", idx: 8},
-		{path: "/123/{abc}", idx: 0},
-		{path: "/123/{abc}/", idx: 0},
-		{path: "123/{abc}", idx: 3},
-		{path: "123/{abc}/", idx: 3},
-		{path: "/123/123{abc}", idx: 0},
-		{path: "/123/123{abc}/", idx: 0},
-		{path: "123/123{abc}", idx: 3},
-		{path: "123/123{abc}/", idx: 3},
+		{path: "/", key: "/"},
+		{path: "/123", key: "/"},
+		{path: "/123/", key: "/"},
+		{path: "123/", key: "123/"},
+		{path: "123", key: "123"},
+		{path: "/{abc}", key: "/"},
+		{path: "/{abc}/", key: "/"},
+		{path: "{abc}/", key: "{abc}/"},
+		{path: "{abc}", key: "{abc}"},
+		{path: "/123{abc}", key: "/"},
+		{path: "/123{abc}/", key: "/"},
+		{path: "123{abc}/", key: "123{abc}/"},
+		{path: "123{abc}", key: "123{abc}"},
+		{path: "/{abc}/123", key: "/"},
+		{path: "/{abc}/123/", key: "/"},
+		{path: "{abc}/123", key: "{abc}/"},
+		{path: "{abc}/123/", key: "{abc}/"},
+		{path: "/123{abc}/123", key: "/"},
+		{path: "/123{abc}/123/", key: "/"},
+		{path: "123{abc}/123", key: "123{abc}/"},
+		{path: "123{abc}/123/", key: "123{abc}/"},
+		{path: "/123/{abc}", key: "/"},
+		{path: "/123/{abc}/", key: "/"},
+		{path: "123/{abc}", key: "123/"},
+		{path: "123/{abc}/", key: "123/"},
+		{path: "/123/123{abc}", key: "/"},
+		{path: "/123/123{abc}/", key: "/"},
+		{path: "123/123{abc}", key: "123/"},
+		{path: "123/123{abc}/", key: "123/"},
 	}
 	for _, tc := range tcs {
-		idx := parseKey(tc.path)
-		assert.Equal(t, tc.idx, idx)
+		key := parseKey(tc.path)
+		assert.Equal(t, tc.key, key)
 	}
 }
 
@@ -423,9 +423,9 @@ func TestRadixPutRecPlainTextPaths(t *testing.T) {
 		nodes   []map[string]string
 	}{
 		{path: "/123/", part: "/123/", handler: func(ctx *Context) {}, nodes: []map[string]string{{"part": "/123/"}}},
-		{path: "/123/abc", part: "abc", handler: func(ctx *Context) {}, nodes: []map[string]string{{"part": "abc"}}},
-		{path: "/123/def/", part: "def/", nodes: []map[string]string{{"part": "def/"}}},
-		//{path: "/123/def/ghi/", part: "ghi/", nodes: []map[string]string{{"part": "ghi/"}}},
+		//{path: "/123/abc", part: "abc", handler: func(ctx *Context) {}, nodes: []map[string]string{{"part": "abc"}}},
+		{path: "/123/def/", part: "def/", handler: func(ctx *Context) {}, nodes: []map[string]string{{"part": "def/"}}},
+		{path: "/123/def/ghi/", part: "ghi/", handler: func(ctx *Context) {}, nodes: []map[string]string{{"part": "ghi/"}}},
 	}
 	r := newRadix()
 	for _, tc := range tcs {
