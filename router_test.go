@@ -422,21 +422,29 @@ func TestRadixPutRecPlainTextPaths(t *testing.T) {
 		handler func(ctx *Context)
 		nodes   []map[string]string
 	}{
-		{path: "/123/", part: "/123/", handler: func(ctx *Context) {}, nodes: []map[string]string{{"part": "/123/"}}},
-		//{path: "/123/abc", part: "abc", handler: func(ctx *Context) {}, nodes: []map[string]string{{"part": "abc"}}},
-		{path: "/123/def/", part: "def/", handler: func(ctx *Context) {}, nodes: []map[string]string{{"part": "def/"}}},
-		{path: "/123/def/ghi/", part: "ghi/", handler: func(ctx *Context) {}, nodes: []map[string]string{{"part": "ghi/"}}},
+		{path: "/123/", part: "/123/", handler: func(ctx *Context) {}},
+		{path: "/", part: "/", handler: func(ctx *Context) {}},
+		{path: "/abc/", part: "/abc/", handler: func(ctx *Context) {}},
+		{path: "/1234/", part: "1234/", handler: func(ctx *Context) {}},
+		{path: "/123/abc", part: "abc", handler: func(ctx *Context) {}},
+		{path: "/123/def/", part: "def/", handler: func(ctx *Context) {}},
+		{path: "/123/def/ghi/", part: "ghi/", handler: func(ctx *Context) {}},
+		{path: "/123/def/ghi", part: "ghi/", handler: func(ctx *Context) {}},
+		{path: "/123/def/haha", part: "ghi/56789", handler: func(ctx *Context) {}},
+		{path: "/123/def/haha/99999/8888", part: "ghi/56789", handler: func(ctx *Context) {}},
+		{path: "/123/def/haha/56789/6666/", part: "ghi/56789", handler: func(ctx *Context) {}},
 	}
 	r := newRadix()
 	for _, tc := range tcs {
 		var n *node
-		if n = r.putRec(r.root, tc.path, tc.handler); r.root == nil && n != nil {
+		if n = r.putRec(r.root, tc.path, tc.handler); n != nil {
 			r.root = n
+			r.size++
 		}
 		assert.NotNil(t, n)
-		//assert.Equal(t, tc.part, n.part)
 	}
 	assert.NotNil(t, r)
+	assert.Equal(t, len(tcs), r.len())
 	fmt.Println(r)
 }
 

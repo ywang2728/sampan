@@ -311,7 +311,7 @@ func (r *radix) String() string {
 // then create new node with the rest of p, add as new n's child.
 // wildcard segment will be considered as single node.
 func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *node) {
-	fmt.Printf("++++++++++++: current node: %+v, path: %s, %p\n", n, path, handler)
+	fmt.Printf("++++++++++++: node: %+v, path: %s, %p\n", n, path, handler)
 	//put whole path in new node if path is plain text, otherwise parse path to take the plain text part or single regex part
 	if n == nil {
 		if idx, eof := parsePrefix(path); eof {
@@ -353,7 +353,7 @@ func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *nod
 			if child, ok := n.children[parseKey(tailPath)]; ok {
 				tail = r.putRec(child, tailPath, handler)
 			} else {
-				tail = r.putRec(nil, path[idx+1:], handler)
+				tail = r.putRec(nil, tailPath, handler)
 			}
 		}
 		if i < ln {
@@ -375,7 +375,7 @@ func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *nod
 			}
 		}
 	}
-	fmt.Printf("----------: current node: %+v, path: %s, %p\n\n", n, path, handler)
+	fmt.Printf("----------: node: %+v, path: %s, %p\n\n", n, path, handler)
 	return
 }
 
@@ -383,9 +383,8 @@ func (r *radix) put(path string, handler func(*Context)) (b bool) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	if t := r.putRec(r.root, path, handler); t != nil {
-		if r.root == nil {
-			r.root = t
-		}
+		r.root = t
+		r.size++
 		b = true
 	}
 	return
