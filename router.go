@@ -235,6 +235,15 @@ func newNode(part string) (n *node) {
 	return
 }
 
+func (n *node) getReChild(part string) (child *node, ok bool) {
+	for _, c := range n.reChildren {
+		if c.part == part {
+			return c, true
+		}
+	}
+	return
+}
+
 // find the longest common prefix from the index position by "/", wildcard will be considered as different part and be treated as single node.
 func commonPrefix(s1, s2 string) (p string, s int) {
 	l1, l2 := len(s1), len(s2)
@@ -346,19 +355,9 @@ func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *nod
 			}
 			i++
 		}
-		var tail *node
-		if i < lp {
-			//there is tail of path indeed, create new node for tail of new path
-			tailPath := path[idx+1:]
-			if child, ok := n.children[parseKey(tailPath)]; ok {
-				tail = r.putRec(child, tailPath, handler)
-			} else {
-				tail = r.putRec(nil, tailPath, handler)
-			}
-		}
 		if i < ln {
 			//there is tail of node path indeed, create new node for both common prefix
-			t = r.putRec(nil, path[:idx+1], nil)
+			t = r.putRec(nil, n.part[:idx+1], nil)
 			n.part = n.part[idx+1:]
 			t.children[parseKey(n.part)] = n
 			if i == lp {
@@ -367,11 +366,21 @@ func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *nod
 		} else {
 			t = n
 		}
-		if tail != nil {
-			if len(tail.exps) == 0 {
-				t.children[parseKey(tail.part)] = tail
+		if i < lp {
+			//there is tail of path indeed, create new node for tail of new path
+			tailPath := path[idx+1:]
+			tailKey := parseKey(tailPath)
+			if child, ok := n.children[tailKey]; ok {
+				r.putRec(child, tailPath, handler)
+			} else if child, ok := n.getReChild(tailKey); ok {
+				r.putRec(child, tailPath, handler)
 			} else {
-				t.reChildren = append(t.reChildren, tail)
+				tail := r.putRec(nil, tailPath, handler)
+				if len(tail.exps) == 0 {
+					t.children[parseKey(tail.part)] = tail
+				} else {
+					t.reChildren = append(t.reChildren, tail)
+				}
 			}
 		}
 	}
@@ -408,7 +417,6 @@ func (r *radix) get(path string) func(*Context) {
 			return nil
 		}
 	}
-	//TODO: handle n.params
 	return n.handler
 }
 
@@ -429,27 +437,6 @@ func (r *radix) delete(path string) (b bool) {
 	}
 	return false
 }
-
-/*func (r *radix) update(path string, handler func(*Context)) (b bool) {
-	if r == nil {
-		return false
-	}
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	if r.root == nil {
-		return false
-	}
-	t := r.root
-	if path != "/" {
-		t = r.root.get(parse(path))
-	}
-	if t.path == path && t.handler != nil {
-		t.handler = handler
-		return true
-	}
-	return false
-}
-*/
 
 func newRouter() *router {
 	return &router{

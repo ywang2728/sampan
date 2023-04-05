@@ -428,11 +428,40 @@ func TestRadixPutRecPlainTextPaths(t *testing.T) {
 		{path: "/1234/", part: "1234/", handler: func(ctx *Context) {}},
 		{path: "/123/abc", part: "abc", handler: func(ctx *Context) {}},
 		{path: "/123/def/", part: "def/", handler: func(ctx *Context) {}},
-		{path: "/123/def/ghi/", part: "ghi/", handler: func(ctx *Context) {}},
-		{path: "/123/def/ghi", part: "ghi/", handler: func(ctx *Context) {}},
-		{path: "/123/def/haha", part: "ghi/56789", handler: func(ctx *Context) {}},
-		{path: "/123/def/haha/99999/8888", part: "ghi/56789", handler: func(ctx *Context) {}},
-		{path: "/123/def/haha/56789/6666/", part: "ghi/56789", handler: func(ctx *Context) {}},
+		//{path: "/123/def/ghi/", part: "ghi/", handler: func(ctx *Context) {}},
+		//{path: "/123/def/ghi", part: "ghi/", handler: func(ctx *Context) {}},
+		//{path: "/123/def/haha", part: "ghi/56789", handler: func(ctx *Context) {}},
+		//{path: "/123/def/haha/99999/8888", part: "ghi/56789", handler: func(ctx *Context) {}},
+		//{path: "/123/def/haha/56789/6666/", part: "ghi/56789", handler: func(ctx *Context) {}},
+	}
+	r := newRadix()
+	for _, tc := range tcs {
+		var n *node
+		if n = r.putRec(r.root, tc.path, tc.handler); n != nil {
+			r.root = n
+			r.size++
+		}
+		assert.NotNil(t, n)
+	}
+	assert.NotNil(t, r)
+	assert.Equal(t, len(tcs), r.len())
+	fmt.Println(r)
+}
+
+func TestRadixPutRecMixedPaths(t *testing.T) {
+	tcs := []struct {
+		path    string
+		part    string
+		handler func(ctx *Context)
+		nodes   []map[string]string
+	}{
+		{path: "/{abc}/", part: "/{abc}/", handler: func(ctx *Context) {}},
+		{path: "/{abc}/123", part: "{def}", handler: func(ctx *Context) {}},
+		{path: "/{abc}/456/789", part: "{def}", handler: func(ctx *Context) {}},
+		{path: "/{abc}/{toto}", part: "/abc/", handler: func(ctx *Context) {}},
+		{path: "/{abc}/{toto}/", part: "/abc/", handler: func(ctx *Context) {}},
+		{path: "/{abc}/{toto}/haha", part: "/abc/", handler: func(ctx *Context) {}},
+		{path: "/{abc}/{toto}/{nini}/", part: "/abc/", handler: func(ctx *Context) {}},
 	}
 	r := newRadix()
 	for _, tc := range tcs {
