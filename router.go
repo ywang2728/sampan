@@ -367,17 +367,20 @@ func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *nod
 			t = n
 		}
 		if i < lp {
+			var tail *node
 			//there is tail of path indeed, create new node for tail of new path
 			tailPath := path[idx+1:]
 			tailKey := parseKey(tailPath)
 			if child, ok := n.children[tailKey]; ok {
-				r.putRec(child, tailPath, handler)
+				tail = r.putRec(child, tailPath, handler)
 			} else if child, ok := n.getReChild(tailKey); ok {
 				r.putRec(child, tailPath, handler)
 			} else {
-				tail := r.putRec(nil, tailPath, handler)
+				tail = r.putRec(nil, tailPath, handler)
+			}
+			if tail != nil {
 				if len(tail.exps) == 0 {
-					t.children[parseKey(tail.part)] = tail
+					t.children[tailKey] = tail
 				} else {
 					t.reChildren = append(t.reChildren, tail)
 				}

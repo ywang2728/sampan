@@ -427,12 +427,12 @@ func TestRadixPutRecPlainTextPaths(t *testing.T) {
 		{path: "/abc/", part: "/abc/", handler: func(ctx *Context) {}},
 		{path: "/1234/", part: "1234/", handler: func(ctx *Context) {}},
 		{path: "/123/abc", part: "abc", handler: func(ctx *Context) {}},
-		{path: "/123/def/", part: "def/", handler: func(ctx *Context) {}},
-		//{path: "/123/def/ghi/", part: "ghi/", handler: func(ctx *Context) {}},
-		//{path: "/123/def/ghi", part: "ghi/", handler: func(ctx *Context) {}},
-		//{path: "/123/def/haha", part: "ghi/56789", handler: func(ctx *Context) {}},
-		//{path: "/123/def/haha/99999/8888", part: "ghi/56789", handler: func(ctx *Context) {}},
-		//{path: "/123/def/haha/56789/6666/", part: "ghi/56789", handler: func(ctx *Context) {}},
+		{path: "/123/def/hij", part: "def/", handler: func(ctx *Context) {}},
+		{path: "/123/def/ghi/", part: "ghi/", handler: func(ctx *Context) {}},
+		{path: "/123/def/ghi", part: "ghi/", handler: func(ctx *Context) {}},
+		{path: "/123/def/haha", part: "ghi/56789", handler: func(ctx *Context) {}},
+		{path: "/123/def/haha/99999/8888", part: "ghi/56789", handler: func(ctx *Context) {}},
+		{path: "/123/def/haha/56789/6666/", part: "ghi/56789", handler: func(ctx *Context) {}},
 	}
 	r := newRadix()
 	for _, tc := range tcs {
