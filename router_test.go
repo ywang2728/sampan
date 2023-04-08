@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -312,11 +313,11 @@ func TestNewNode(t *testing.T) {
 		n := newNode(tc.part)
 		assert.Equal(t, tc.part, n.part)
 		if tc.exps == nil {
-			assert.Nil(t, n.exps)
+			assert.Nil(t, n.rePatterns)
 		} else {
-			assert.Equal(t, len(n.exps), len(tc.exps))
+			assert.Equal(t, len(n.rePatterns.keys), len(tc.exps))
 			for k, v := range tc.exps {
-				assert.Equal(t, v, n.exps[k].String())
+				assert.Equal(t, v, n.rePatterns.exps[k].String())
 			}
 		}
 		assert.NotNil(t, n.children)
@@ -389,8 +390,8 @@ func TestRadixPutRecNewSingleRegexPath(t *testing.T) {
 		n := r.putRec(nil, tc.path, func(context *Context) {})
 		assert.NotNil(t, n)
 		assert.Equal(t, tc.part, n.part)
-		assert.Equal(t, 1, len(n.exps))
-		assert.Equal(t, tc.expStr, n.exps[tc.expKey].String())
+		assert.Equal(t, 1, len(n.rePatterns.keys))
+		assert.Equal(t, tc.expStr, n.rePatterns.exps[tc.expKey].String())
 	}
 }
 
@@ -477,8 +478,44 @@ func TestRadixPutRecMixedPaths(t *testing.T) {
 	fmt.Println(r)
 }
 
+func TestGetRecPlainTextPath(t *testing.T) {
+	tcs := []struct {
+		path    string
+		part    string
+		handler func(ctx *Context)
+		nodes   []map[string]string
+	}{
+		{path: "/123/toto", part: "/123/", handler: func(ctx *Context) { fmt.Println("func:", "/123/toto") }},
+		{path: "/abc/def", part: "/abc/", handler: func(ctx *Context) { fmt.Println("func:", "/abc/def") }},
+		{path: "/123/haha/", part: "1234/", handler: func(ctx *Context) { fmt.Println("func:", "/123/haha/") }},
+		{path: "/123/haha", part: "1234/", handler: func(ctx *Context) { fmt.Println("func:", "/123/haha") }},
+		{path: "/123/haha/nini", part: "1234/", handler: func(ctx *Context) { fmt.Println("func:", "/123/haha/nini") }},
+	}
+	r := newRadix()
+	for _, tc := range tcs {
+		var n *node
+		if n = r.putRec(r.root, tc.path, tc.handler); n != nil {
+			r.root = n
+			r.size++
+		}
+		assert.NotNil(t, n)
+	}
+	assert.NotNil(t, r)
+	assert.Equal(t, len(tcs), r.len())
+	fmt.Println(r)
+	for _, tc := range tcs {
+		n := r.getRec(r.root, tc.path)
+		if n != nil {
+			n.handler(nil)
+		} else {
+			fmt.Println("n is nil")
+		}
+	}
+}
+
 func TestNewRouter(t *testing.T) {
 	r := newRouter()
 	assert.NotNil(t, r)
 	assert.NotNil(t, r.trees)
+	fmt.Println(strings.CutPrefix("abc", "ab"))
 }

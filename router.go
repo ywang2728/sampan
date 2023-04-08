@@ -11,14 +11,22 @@ import (
 )
 
 const (
-	LruCapacity int = 255
+	LruCapacity = 255
+	BeginExp    = '{'
+	EndExp      = '}'
+	DelimExp    = ':'
 )
 
 type (
+	reMap struct {
+		keys []string
+		exps map[string]*regexp.Regexp
+	}
+
 	node struct {
-		part    string
-		exps    map[string]*regexp.Regexp
-		handler func(*Context)
+		part       string
+		rePatterns *reMap
+		handler    func(*Context)
 		//store non-regex nodes by first segment of tail of path as map key.
 		children map[string]*node
 		//store regex nodes, keep the insert order for seeking.
@@ -100,12 +108,12 @@ func (l *lru) delete(path string) {
 
 // parse the prefix from path for one node base on the difference of regex segment and plain text segment.
 func parsePrefix(path string) (idx int, eof bool) {
-	if i, lp := 0, len(path); strings.Contains(path, "/") && strings.Contains(path, "{") {
-		if strings.Contains(path[:strings.Index(path, "/")], "{") {
+	if i, lp := 0, len(path); strings.Contains(path, "/") && strings.Contains(path, string(BeginExp)) {
+		if strings.Contains(path[:strings.Index(path, "/")], string(BeginExp)) {
 			for cnt := 0; i < lp; i++ {
-				if path[i] == '{' {
+				if path[i] == BeginExp {
 					cnt++
-				} else if path[i] == '}' {
+				} else if path[i] == EndExp {
 					cnt--
 				} else if path[i] == '/' && cnt == 0 {
 					idx = i
@@ -116,7 +124,7 @@ func parsePrefix(path string) (idx int, eof bool) {
 			for i < lp {
 				if path[i] == '/' {
 					idx = i
-				} else if path[i] == '{' {
+				} else if path[i] == BeginExp {
 					break
 				}
 				i++
@@ -135,9 +143,9 @@ func parsePrefix(path string) (idx int, eof bool) {
 func parseKey(path string) (key string) {
 	i := 0
 	for cnt := 0; i < len(path); i++ {
-		if path[i] == '{' {
+		if path[i] == BeginExp {
 			cnt++
-		} else if path[i] == '}' {
+		} else if path[i] == EndExp {
 			cnt--
 		} else if path[i] == '/' && cnt == 0 {
 			key = path[:i+1]
@@ -167,9 +175,9 @@ func parseExps(part string) (matches []string) {
 			}
 			if cnt == 0 {
 				s := sb.String()
-				if strings.Contains(s, ":") {
-					if strings.HasPrefix(s, ":") || strings.HasSuffix(s, ":") ||
-						!expKeyRe.MatchString(s[0:strings.Index(s, ":")]) {
+				if strings.Contains(s, string(DelimExp)) {
+					if strings.HasPrefix(s, string(DelimExp)) || strings.HasSuffix(s, string(DelimExp)) ||
+						!expKeyRe.MatchString(s[0:strings.Index(s, string(DelimExp))]) {
 						log.Fatalf("Expression parsing error, #%v", errors.New(`invalid expression:`+s))
 					}
 				} else {
@@ -198,9 +206,9 @@ func splitPath(path string) (parts []string) {
 	part := strings.Builder{}
 	for i, t := 0, 0; i < len(path); i++ {
 		part.WriteString(string(path[i]))
-		if path[i] == '{' {
+		if path[i] == BeginExp {
 			t++
-		} else if path[i] == '}' {
+		} else if path[i] == EndExp {
 			t--
 		} else if path[i] == '/' && t == 0 {
 			parts = append(parts, part.String())
@@ -213,6 +221,26 @@ func splitPath(path string) (parts []string) {
 	return
 }
 
+func newReMap(part string) (m *reMap) {
+	m = &reMap{
+		keys: []string{},
+		exps: make(map[string]*regexp.Regexp),
+	}
+	for _, exp := range parseExps(part) {
+		k, v, ok := strings.Cut(exp, string(DelimExp))
+		if _, exist := m.exps[k]; exist {
+			log.Fatalf("Expression parsing error, #%v", errors.New(`duplicated expression key:`+k))
+		}
+		m.keys = append(m.keys, k)
+		if ok {
+			m.exps[k] = regexp.MustCompile(v)
+		} else {
+			m.exps[k] = regexp.MustCompile(`\S*`)
+		}
+	}
+	return
+}
+
 func newNode(part string) (n *node) {
 	n = &node{
 		children:   make(map[string]*node),
@@ -220,16 +248,17 @@ func newNode(part string) (n *node) {
 	}
 	if len(part) > 0 {
 		n.part = part
-		if strings.Contains(part, "{") {
-			n.exps = make(map[string]*regexp.Regexp)
-			for _, exp := range parseExps(part) {
-				k, v, ok := strings.Cut(exp, ":")
-				if ok {
-					n.exps[k] = regexp.MustCompile(v)
-				} else {
-					n.exps[k] = regexp.MustCompile(`\S*`)
-				}
-			}
+		if strings.Contains(part, string(BeginExp)) {
+			//n.exps = make(map[string]*regexp.Regexp)
+			//for _, exp := range parseExps(part) {
+			//	k, v, ok := strings.Cut(exp, string(DelimExp))
+			//	if ok {
+			//		n.exps[k] = regexp.MustCompile(v)
+			//	} else {
+			//		n.exps[k] = regexp.MustCompile(`\S*`)
+			//	}
+			//}
+			n.rePatterns = newReMap(part)
 		}
 	}
 	return
@@ -320,7 +349,6 @@ func (r *radix) String() string {
 // then create new node with the rest of p, add as new n's child.
 // wildcard segment will be considered as single node.
 func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *node) {
-	fmt.Printf("++++++++++++: node: %+v, path: %s, %p\n", n, path, handler)
 	//put whole path in new node if path is plain text, otherwise parse path to take the plain text part or single regex part
 	if n == nil {
 		if idx, eof := parsePrefix(path); eof {
@@ -332,10 +360,10 @@ func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *nod
 			child := r.putRec(nil, path[idx+1:], handler)
 			if child != nil {
 				t = newNode(path[:idx+1])
-				if len(child.exps) > 0 {
-					t.reChildren = append(t.reChildren, child)
-				} else {
+				if child.rePatterns == nil {
 					t.children[parseKey(child.part)] = child
+				} else {
+					t.reChildren = append(t.reChildren, child)
 				}
 			}
 		}
@@ -379,7 +407,7 @@ func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *nod
 				tail = r.putRec(nil, tailPath, handler)
 			}
 			if tail != nil {
-				if len(tail.exps) == 0 {
+				if tail.rePatterns == nil {
 					t.children[tailKey] = tail
 				} else {
 					t.reChildren = append(t.reChildren, tail)
@@ -387,7 +415,6 @@ func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *nod
 			}
 		}
 	}
-	fmt.Printf("----------: node: %+v, path: %s, %p\n\n", n, path, handler)
 	return
 }
 
@@ -402,10 +429,32 @@ func (r *radix) put(path string, handler func(*Context)) (b bool) {
 	return
 }
 
-func (r *radix) getRec(n *node, p string) (t *node) {
-	return nil
+func (r *radix) getRec(n *node, path string) (t *node) {
+	if n.rePatterns == nil || len(n.rePatterns.keys) == 0 {
+		// current node has plain text part, compare with path and call recursively with child and tail, then return found node.
+		// find child firstly from plain text children map, if child is not found, loop call with every regex child with tail, find the first not null node.
+		if tail, ok := strings.CutPrefix(path, n.part); ok {
+			if len(tail) > 0 {
+				if child, ok := n.children[parseKey(tail)]; ok {
+					t = r.getRec(child, tail)
+				} else {
+					for _, reChild := range n.reChildren {
+						if t = r.getRec(reChild, tail); t != nil {
+							break
+						}
+					}
+				}
+			} else if n.handler != nil {
+				t = n
+			}
+		}
+	} else {
+
+	}
+	return
 }
 
+// Get handler from cache by path, if it's not exist, get recursively from tree.
 func (r *radix) get(path string) func(*Context) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
