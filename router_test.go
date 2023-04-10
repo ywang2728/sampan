@@ -272,7 +272,8 @@ func TestParseExps(t *testing.T) {
 		assert.Equal(t, parseRe(tc.part), tc.exps)
 	}
 }
-func TestParsePrefix(t *testing.T) {
+
+func TestParsePref2(t *testing.T) {
 	tcs := []struct {
 		path string
 		idx  int

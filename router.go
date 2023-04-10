@@ -129,26 +129,17 @@ func (rd *reDelim) load() int32 {
 
 // parse the prefix from path for one node base on the difference of regex segment and plain text segment.
 func parsePref(path string) (idx int, eof bool) {
-	if i, lp := 0, len(path); strings.Contains(path, "/") && strings.Contains(path, string(ReDelimBgn)) {
-		if strings.Contains(path[:strings.Index(path, "/")], string(ReDelimBgn)) {
-			for delim := newReDelim(); i < lp; i++ {
-				if path[i] == ReDelimBgn {
-					delim.open()
-				} else if path[i] == ReDelimEnd {
-					delim.close()
-				} else if path[i] == '/' && delim.closed() {
-					idx = i
-					break
-				}
-			}
-		} else {
-			for i < lp {
-				if path[i] == '/' {
-					idx = i
-				} else if path[i] == ReDelimBgn {
-					break
-				}
-				i++
+	if lp, i, j := len(path), strings.Index(path, string(ReDelimBgn)), strings.Index(path, "/"); i == -1 || j == -1 {
+		idx, eof = lp-1, true
+	} else if i < j {
+		for delim := newReDelim(); i < lp; i++ {
+			if path[i] == ReDelimBgn {
+				delim.open()
+			} else if path[i] == ReDelimEnd {
+				delim.close()
+			} else if path[i] == '/' && delim.closed() {
+				idx = i
+				break
 			}
 		}
 		if i == lp || i == lp-1 {
@@ -156,8 +147,7 @@ func parsePref(path string) (idx int, eof bool) {
 			eof = true
 		}
 	} else {
-		idx = lp - 1
-		eof = true
+		idx = strings.LastIndex(path[:i], "/")
 	}
 	return
 }
@@ -205,7 +195,7 @@ func parseRe(part string) (matches []string) {
 	expKeyRe := regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*$`)
 	var sb strings.Builder
 	delim := newReDelim()
-	for i := strings.Index(part, "{"); i < len(part); i++ {
+	for i := strings.Index(part, string(ReDelimBgn)); i < len(part); i++ {
 		if part[i] == '{' {
 			delim.open()
 			if delim.load() != 1 {
