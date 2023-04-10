@@ -83,8 +83,12 @@ func TestParseRePartPfx(t *testing.T) {
 	}{
 		{part: "/", idx: 0, eof: true},
 		{part: "hello/", idx: 5, eof: true},
-		//{part: "hello{name}/", idx: 4, eof: false},
-		//{part: "{abc}", idx: 4, eof: false},
+		{part: "hello{name}/", idx: 4, eof: false},
+		{part: "{abc}", idx: 4, eof: true},
+		{part: "{abc}/", idx: 4, eof: false},
+		{part: "{abc}world", idx: 4, eof: false},
+		{part: "{abc}world/", idx: 4, eof: false},
+		{part: "{abc}-world/", idx: 4, eof: false},
 	}
 	for _, tc := range tcs {
 		idx, eof := parseRePartPref(tc.part)
