@@ -8,16 +8,21 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 const (
 	LruCapacity = 255
-	BeginExp    = '{'
-	EndExp      = '}'
-	DelimExp    = ':'
+	ReDelimBgn  = '{'
+	ReDelimMid  = ':'
+	ReDelimEnd  = '}'
 )
 
 type (
+	reDelim struct {
+		cnt atomic.Int32
+	}
+
 	reMap struct {
 		keys []string
 		exps map[string]*regexp.Regexp
@@ -57,6 +62,7 @@ type (
 	}
 )
 
+// LRU cache for storing the latest recent URL
 func newLru(cap int) *lru {
 	return &lru{
 		cap:   cap,
@@ -64,17 +70,14 @@ func newLru(cap int) *lru {
 		paths: make(map[string]*list.Element, cap),
 	}
 }
-
 func (l *lru) clear() {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	l.nodes.Init()
 }
-
 func (l *lru) len() int {
 	return l.nodes.Len()
 }
-
 func (l *lru) put(path string, node *node) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
@@ -87,7 +90,6 @@ func (l *lru) put(path string, node *node) {
 		l.paths[path] = l.nodes.PushFront(&lruNode{path: path, node: node})
 	}
 }
-
 func (l *lru) get(path string) (n *node) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
@@ -97,7 +99,6 @@ func (l *lru) get(path string) (n *node) {
 	}
 	return
 }
-
 func (l *lru) delete(path string) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
@@ -106,16 +107,36 @@ func (l *lru) delete(path string) {
 	}
 }
 
+// Regex expression delimiter
+func newReDelim() (delim *reDelim) {
+	return &reDelim{atomic.Int32{}}
+}
+func (rd *reDelim) reset() {
+	rd.cnt.Store(0)
+}
+func (rd *reDelim) open() (opened bool) {
+	return 0 != rd.cnt.Add(1)
+}
+func (rd *reDelim) close() (closed bool) {
+	return 0 == rd.cnt.Add(-1)
+}
+func (rd *reDelim) closed() bool {
+	return 0 == rd.cnt.Load()
+}
+func (rd *reDelim) load() int32 {
+	return rd.cnt.Load()
+}
+
 // parse the prefix from path for one node base on the difference of regex segment and plain text segment.
 func parsePrefix(path string) (idx int, eof bool) {
-	if i, lp := 0, len(path); strings.Contains(path, "/") && strings.Contains(path, string(BeginExp)) {
-		if strings.Contains(path[:strings.Index(path, "/")], string(BeginExp)) {
-			for cnt := 0; i < lp; i++ {
-				if path[i] == BeginExp {
-					cnt++
-				} else if path[i] == EndExp {
-					cnt--
-				} else if path[i] == '/' && cnt == 0 {
+	if i, lp := 0, len(path); strings.Contains(path, "/") && strings.Contains(path, string(ReDelimBgn)) {
+		if strings.Contains(path[:strings.Index(path, "/")], string(ReDelimBgn)) {
+			for delim := newReDelim(); i < lp; i++ {
+				if path[i] == ReDelimBgn {
+					delim.open()
+				} else if path[i] == ReDelimEnd {
+					delim.close()
+				} else if path[i] == '/' && delim.closed() {
 					idx = i
 					break
 				}
@@ -124,7 +145,7 @@ func parsePrefix(path string) (idx int, eof bool) {
 			for i < lp {
 				if path[i] == '/' {
 					idx = i
-				} else if path[i] == BeginExp {
+				} else if path[i] == ReDelimBgn {
 					break
 				}
 				i++
@@ -140,14 +161,40 @@ func parsePrefix(path string) (idx int, eof bool) {
 	}
 	return
 }
+
+// parse the prefix from the part of Regex node for base on the difference of regex segment and plain text segment.
+//func parseRePartPrefix(part string) (idx int, eof bool) {
+//	if i, lp := strings.Index(part, string(ReDelimBgn)), len(part); i == -1 {
+//		idx, eof = lp-1, true
+//	} else if i == 0 {
+//		for cnt := 0; i < len(part); i++ {
+//			if part[i] == ReDelimBgn {
+//				cnt++
+//			} else if part[i] == ReDelimEnd {
+//				cnt--
+//				if cnt == 0 {
+//					idx = i
+//					if i == len(part)-1 {
+//						aft = ""
+//					} else {
+//						aft = part[i+1:]
+//					}
+//					break
+//				}
+//			}
+//		}
+//	}
+//	return
+//}
+
 func parseKey(path string) (key string) {
 	i := 0
-	for cnt := 0; i < len(path); i++ {
-		if path[i] == BeginExp {
-			cnt++
-		} else if path[i] == EndExp {
-			cnt--
-		} else if path[i] == '/' && cnt == 0 {
+	for delim := newReDelim(); i < len(path); i++ {
+		if path[i] == ReDelimBgn {
+			delim.open()
+		} else if path[i] == ReDelimEnd {
+			delim.close()
+		} else if path[i] == '/' && delim.closed() {
 			key = path[:i+1]
 			break
 		}
@@ -161,23 +208,23 @@ func parseKey(path string) (key string) {
 func parseExps(part string) (matches []string) {
 	expKeyRe := regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*$`)
 	var sb strings.Builder
-	cnt := 0
+	delim := newReDelim()
 	for i := strings.Index(part, "{"); i < len(part); i++ {
 		if part[i] == '{' {
-			cnt++
-			if cnt != 1 {
+			delim.open()
+			if delim.load() != 1 {
 				sb.WriteString("{")
 			}
 		} else if part[i] == '}' {
-			cnt--
-			if cnt != 0 {
+			delim.close()
+			if delim.load() != 0 {
 				sb.WriteString("}")
 			}
-			if cnt == 0 {
+			if delim.closed() {
 				s := sb.String()
-				if strings.Contains(s, string(DelimExp)) {
-					if strings.HasPrefix(s, string(DelimExp)) || strings.HasSuffix(s, string(DelimExp)) ||
-						!expKeyRe.MatchString(s[0:strings.Index(s, string(DelimExp))]) {
+				if strings.Contains(s, string(ReDelimMid)) {
+					if strings.HasPrefix(s, string(ReDelimMid)) || strings.HasSuffix(s, string(ReDelimMid)) ||
+						!expKeyRe.MatchString(s[0:strings.Index(s, string(ReDelimMid))]) {
 						log.Fatalf("Expression parsing error, #%v", errors.New(`invalid expression:`+s))
 					}
 				} else {
@@ -192,11 +239,11 @@ func parseExps(part string) (matches []string) {
 					break
 				}
 			}
-		} else if cnt != 0 {
+		} else if !delim.closed() {
 			sb.WriteString(string(part[i]))
 		}
 	}
-	if cnt != 0 {
+	if !delim.closed() {
 		log.Fatalf("Expression parsing error, #%v", errors.New(`invalid expression:`+part))
 	}
 	return
@@ -206,9 +253,9 @@ func splitPath(path string) (parts []string) {
 	part := strings.Builder{}
 	for i, t := 0, 0; i < len(path); i++ {
 		part.WriteString(string(path[i]))
-		if path[i] == BeginExp {
+		if path[i] == ReDelimBgn {
 			t++
-		} else if path[i] == EndExp {
+		} else if path[i] == ReDelimEnd {
 			t--
 		} else if path[i] == '/' && t == 0 {
 			parts = append(parts, part.String())
@@ -227,7 +274,7 @@ func newReMap(part string) (m *reMap) {
 		exps: make(map[string]*regexp.Regexp),
 	}
 	for _, exp := range parseExps(part) {
-		k, v, ok := strings.Cut(exp, string(DelimExp))
+		k, v, ok := strings.Cut(exp, string(ReDelimMid))
 		if _, exist := m.exps[k]; exist {
 			log.Fatalf("Expression parsing error, #%v", errors.New(`duplicated expression key:`+k))
 		}
@@ -248,10 +295,10 @@ func newNode(part string) (n *node) {
 	}
 	if len(part) > 0 {
 		n.part = part
-		if strings.Contains(part, string(BeginExp)) {
+		if strings.Contains(part, string(ReDelimBgn)) {
 			//n.exps = make(map[string]*regexp.Regexp)
 			//for _, exp := range parseExps(part) {
-			//	k, v, ok := strings.Cut(exp, string(DelimExp))
+			//	k, v, ok := strings.Cut(exp, string(ReDelimMid))
 			//	if ok {
 			//		n.exps[k] = regexp.MustCompile(v)
 			//	} else {

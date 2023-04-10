@@ -36,6 +36,62 @@ var (
 	}
 )
 
+func TestNewReDelim(t *testing.T) {
+	rd := newReDelim()
+	assert.NotNil(t, rd)
+	assert.True(t, rd.closed())
+}
+
+func TestReDelimOpen(t *testing.T) {
+	rd := newReDelim()
+	assert.NotNil(t, rd)
+	assert.True(t, rd.open())
+	assert.False(t, rd.closed())
+}
+
+func TestReDelimClose(t *testing.T) {
+	rd := newReDelim()
+	assert.NotNil(t, rd)
+	rd.open()
+	assert.True(t, rd.close())
+	assert.True(t, rd.closed())
+}
+
+func TestReDelimClosed(t *testing.T) {
+	rd := newReDelim()
+	assert.NotNil(t, rd)
+	assert.True(t, rd.open())
+	assert.False(t, rd.closed())
+	assert.True(t, rd.close())
+	assert.True(t, rd.closed())
+}
+
+func TestReDelimReset(t *testing.T) {
+	rd := newReDelim()
+	assert.NotNil(t, rd)
+	assert.True(t, rd.open())
+	assert.False(t, rd.closed())
+	rd.reset()
+	assert.True(t, rd.closed())
+}
+
+//func TestCutRePart(t *testing.T) {
+//	tcs := []struct {
+//		part string
+//		bef  string
+//		aft  string
+//	}{
+//		{part: "/", bef: "/", aft: ""},
+//		{part: "hello/", bef: "hello/", aft: ""},
+//		//{part: "{abc}/", bef: "hello/", aft: ""},
+//	}
+//	for _, tc := range tcs {
+//		bef, aft := cutRePart(tc.part)
+//		assert.Equal(t, tc.bef, bef)
+//		assert.Equal(t, tc.aft, aft)
+//	}
+//}
+
 func TestSplitPath(t *testing.T) {
 	tcs := []struct {
 		path  string
