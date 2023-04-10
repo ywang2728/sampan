@@ -128,7 +128,7 @@ func (rd *reDelim) load() int32 {
 }
 
 // parse the prefix from path for one node base on the difference of regex segment and plain text segment.
-func parsePrefix(path string) (idx int, eof bool) {
+func parsePref(path string) (idx int, eof bool) {
 	if i, lp := 0, len(path); strings.Contains(path, "/") && strings.Contains(path, string(ReDelimBgn)) {
 		if strings.Contains(path[:strings.Index(path, "/")], string(ReDelimBgn)) {
 			for delim := newReDelim(); i < lp; i++ {
@@ -162,30 +162,26 @@ func parsePrefix(path string) (idx int, eof bool) {
 	return
 }
 
-// parse the prefix from the part of Regex node for base on the difference of regex segment and plain text segment.
-//func parseRePartPrefix(part string) (idx int, eof bool) {
-//	if i, lp := strings.Index(part, string(ReDelimBgn)), len(part); i == -1 {
-//		idx, eof = lp-1, true
-//	} else if i == 0 {
-//		for cnt := 0; i < len(part); i++ {
-//			if part[i] == ReDelimBgn {
-//				cnt++
-//			} else if part[i] == ReDelimEnd {
-//				cnt--
-//				if cnt == 0 {
-//					idx = i
-//					if i == len(part)-1 {
-//						aft = ""
-//					} else {
-//						aft = part[i+1:]
-//					}
-//					break
-//				}
-//			}
-//		}
-//	}
-//	return
-//}
+// Parse the prefix from the part of Regex node for base on the difference of regex segment and plain text segment.
+func parseRePartPref(part string) (idx int, eof bool) {
+	if lp, i := len(part), strings.Index(part, string(ReDelimBgn)); i == -1 {
+		idx, eof = lp-1, true
+	} else if i == 0 {
+		for delim := newReDelim(); i < len(part); i++ {
+			if part[i] == ReDelimBgn {
+				delim.open()
+			} else if part[i] == ReDelimEnd {
+				if delim.close() {
+					idx, eof = i, i == len(part)-1
+					break
+				}
+			}
+		}
+	} else {
+		idx, eof = i-1, false
+	}
+	return
+}
 
 func parseKey(path string) (key string) {
 	i := 0
@@ -205,7 +201,7 @@ func parseKey(path string) (key string) {
 	return
 }
 
-func parseExps(part string) (matches []string) {
+func parseRe(part string) (matches []string) {
 	expKeyRe := regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*$`)
 	var sb strings.Builder
 	delim := newReDelim()
@@ -273,7 +269,7 @@ func newReMap(part string) (m *reMap) {
 		keys: []string{},
 		exps: make(map[string]*regexp.Regexp),
 	}
-	for _, exp := range parseExps(part) {
+	for _, exp := range parseRe(part) {
 		k, v, ok := strings.Cut(exp, string(ReDelimMid))
 		if _, exist := m.exps[k]; exist {
 			log.Fatalf("Expression parsing error, #%v", errors.New(`duplicated expression key:`+k))
@@ -398,7 +394,7 @@ func (r *radix) String() string {
 func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *node) {
 	//put whole path in new node if path is plain text, otherwise parse path to take the plain text part or single regex part
 	if n == nil {
-		if idx, eof := parsePrefix(path); eof {
+		if idx, eof := parsePref(path); eof {
 			// the whole tail path in new node
 			t = newNode(path)
 			t.handler = handler

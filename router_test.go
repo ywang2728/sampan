@@ -75,22 +75,23 @@ func TestReDelimReset(t *testing.T) {
 	assert.True(t, rd.closed())
 }
 
-//func TestCutRePart(t *testing.T) {
-//	tcs := []struct {
-//		part string
-//		bef  string
-//		aft  string
-//	}{
-//		{part: "/", bef: "/", aft: ""},
-//		{part: "hello/", bef: "hello/", aft: ""},
-//		//{part: "{abc}/", bef: "hello/", aft: ""},
-//	}
-//	for _, tc := range tcs {
-//		bef, aft := cutRePart(tc.part)
-//		assert.Equal(t, tc.bef, bef)
-//		assert.Equal(t, tc.aft, aft)
-//	}
-//}
+func TestParseRePartPfx(t *testing.T) {
+	tcs := []struct {
+		part string
+		idx  int
+		eof  bool
+	}{
+		{part: "/", idx: 0, eof: true},
+		{part: "hello/", idx: 5, eof: true},
+		//{part: "hello{name}/", idx: 4, eof: false},
+		//{part: "{abc}", idx: 4, eof: false},
+	}
+	for _, tc := range tcs {
+		idx, eof := parseRePartPref(tc.part)
+		assert.Equal(t, tc.idx, idx)
+		assert.Equal(t, tc.eof, eof)
+	}
+}
 
 func TestSplitPath(t *testing.T) {
 	tcs := []struct {
@@ -263,8 +264,8 @@ func TestParseExps(t *testing.T) {
 		{part: "123-{abc:[a-z]{3-5}}-567-{haha:\\w+}--world++{a1:[0-9][0-9]?}ll/", exps: []string{"abc:[a-z]{3-5}", "haha:\\w+", "a1:[0-9][0-9]?"}, cnt: 3},
 	}
 	for _, tc := range tcs {
-		assert.Equal(t, len(parseExps(tc.part)), tc.cnt)
-		assert.Equal(t, parseExps(tc.part), tc.exps)
+		assert.Equal(t, len(parseRe(tc.part)), tc.cnt)
+		assert.Equal(t, parseRe(tc.part), tc.exps)
 	}
 }
 func TestParsePrefix(t *testing.T) {
@@ -304,7 +305,7 @@ func TestParsePrefix(t *testing.T) {
 		{path: "123/123{abc}/", idx: 3, eof: false},
 	}
 	for _, tc := range tcs {
-		idx, eof := parsePrefix(tc.path)
+		idx, eof := parsePref(tc.path)
 		assert.Equal(t, tc.idx, idx)
 		assert.Equal(t, tc.eof, eof)
 	}
