@@ -18,13 +18,17 @@ const (
 	ReDelimEnd  = '}'
 )
 
+var (
+	ReKeyPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*$`)
+)
+
 type (
 	reDelim struct {
 		cnt atomic.Int32
 	}
 
 	reMap struct {
-		keys []string
+		divs []string
 		exps map[string]*regexp.Regexp
 	}
 
@@ -152,27 +156,7 @@ func parsePref(path string) (idx int, eof bool) {
 	return
 }
 
-// Parse the prefix from the part of Regex node for base on the difference of regex segment and plain text segment.
-func parseRePartPref(part string) (idx int, eof bool) {
-	if lp, i := len(part), strings.Index(part, string(ReDelimBgn)); i == -1 {
-		idx, eof = lp-1, true
-	} else if i == 0 {
-		for delim := newReDelim(); i < len(part); i++ {
-			if part[i] == ReDelimBgn {
-				delim.open()
-			} else if part[i] == ReDelimEnd {
-				if delim.close() {
-					idx, eof = i, i == len(part)-1
-					break
-				}
-			}
-		}
-	} else {
-		idx, eof = i-1, false
-	}
-	return
-}
-
+// Parse first segment of tail path as key.
 func parseKey(path string) (key string) {
 	i := 0
 	for delim := newReDelim(); i < len(path); i++ {
@@ -191,20 +175,59 @@ func parseKey(path string) (key string) {
 	return
 }
 
+func parseRePattern(part string) (bef string, aft string, isRe bool) {
+	if i := strings.Index(part, string(ReDelimBgn)); i == -1 {
+		bef, aft, isRe = part, "", false
+	} else if i == 0 {
+		delim := newReDelim()
+		for ; i < len(part); i++ {
+			if part[i] == ReDelimBgn {
+				delim.open()
+			} else if part[i] == ReDelimEnd {
+				if delim.close() {
+					if i == len(part)-1 {
+						bef, aft, isRe = part, "", true
+					} else {
+						bef, aft, isRe = part[:i+1], part[i+1:], true
+					}
+					bared := bef[1 : len(bef)-1]
+					if strings.Contains(bared, string(ReDelimMid)) {
+						if strings.HasPrefix(bared, string(ReDelimMid)) || strings.HasSuffix(bared, string(ReDelimMid)) ||
+							!ReKeyPattern.MatchString(bared[:strings.Index(bared, string(ReDelimMid))]) {
+							log.Fatalf("Expression parsing error, #%v", errors.New(`invalid expression:`+bef))
+						}
+					} else {
+						if !ReKeyPattern.MatchString(bared) {
+							log.Fatalf("Expression parsing error, #%v", errors.New(`invalid expression:`+bef))
+						}
+					}
+					break
+				}
+			}
+		}
+		if !delim.closed() {
+			log.Fatalf("Expression parsing error, #%v", errors.New(`invalid expression:`+part))
+		}
+	} else {
+		bef, aft, isRe = part[:i], part[i:], false
+	}
+	return
+}
+
 func parseRe(part string) (matches []string) {
 	expKeyRe := regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*$`)
 	var sb strings.Builder
 	delim := newReDelim()
 	for i := strings.Index(part, string(ReDelimBgn)); i < len(part); i++ {
-		if part[i] == '{' {
+		if part[i] == ReDelimBgn {
 			delim.open()
 			if delim.load() != 1 {
-				sb.WriteString("{")
+				sb.WriteString(string(part[i]))
 			}
-		} else if part[i] == '}' {
+		} else if part[i] == ReDelimEnd {
 			delim.close()
 			if delim.load() != 0 {
-				sb.WriteString("}")
+				sb.WriteString(string(part[i]))
 			}
 			if delim.closed() {
 				s := sb.String()
@@ -219,7 +242,7 @@ func parseRe(part string) (matches []string) {
 					}
 				}
 				matches = append(matches, s)
-				if strings.Contains(part[i:], "{") {
+				if strings.Contains(part[i:], string(ReDelimBgn)) {
 					sb.Reset()
 				} else {
 					break
@@ -235,43 +258,39 @@ func parseRe(part string) (matches []string) {
 	return
 }
 
-func splitPath(path string) (parts []string) {
-	part := strings.Builder{}
-	for i, t := 0, 0; i < len(path); i++ {
-		part.WriteString(string(path[i]))
-		if path[i] == ReDelimBgn {
-			t++
-		} else if path[i] == ReDelimEnd {
-			t--
-		} else if path[i] == '/' && t == 0 {
-			parts = append(parts, part.String())
-			part.Reset()
-		}
+// regex map to handle the regex expression with inserting order
+func newReMap(part string) (m *reMap) {
+	m = &reMap{
+		divs: []string{},
+		exps: make(map[string]*regexp.Regexp),
 	}
-	if part.Len() > 0 {
-		parts = append(parts, part.String())
+	var (
+		seg  string
+		tail = part
+		isRe bool
+	)
+	for {
+		seg, tail, isRe = parseRePattern(tail)
+		if isRe {
+			k, v, ok := strings.Cut(seg[1:len(seg)-1], string(ReDelimMid))
+			if _, exist := m.exps[k]; exist {
+				log.Fatalf("Expression parsing error, #%v", errors.New(`duplicated expression key:`+k))
+			}
+			if ok {
+				m.exps[k] = regexp.MustCompile(v)
+			} else {
+				m.exps[k] = regexp.MustCompile(`\S*`)
+			}
+		}
+		m.divs = append(m.divs, seg)
+		if len(tail) == 0 {
+			break
+		}
 	}
 	return
 }
-
-func newReMap(part string) (m *reMap) {
-	m = &reMap{
-		keys: []string{},
-		exps: make(map[string]*regexp.Regexp),
-	}
-	for _, exp := range parseRe(part) {
-		k, v, ok := strings.Cut(exp, string(ReDelimMid))
-		if _, exist := m.exps[k]; exist {
-			log.Fatalf("Expression parsing error, #%v", errors.New(`duplicated expression key:`+k))
-		}
-		m.keys = append(m.keys, k)
-		if ok {
-			m.exps[k] = regexp.MustCompile(v)
-		} else {
-			m.exps[k] = regexp.MustCompile(`\S*`)
-		}
-	}
-	return
+func (rm *reMap) len() (l int) {
+	return len(rm.divs)
 }
 
 func newNode(part string) (n *node) {
@@ -282,15 +301,6 @@ func newNode(part string) (n *node) {
 	if len(part) > 0 {
 		n.part = part
 		if strings.Contains(part, string(ReDelimBgn)) {
-			//n.exps = make(map[string]*regexp.Regexp)
-			//for _, exp := range parseExps(part) {
-			//	k, v, ok := strings.Cut(exp, string(ReDelimMid))
-			//	if ok {
-			//		n.exps[k] = regexp.MustCompile(v)
-			//	} else {
-			//		n.exps[k] = regexp.MustCompile(`\S*`)
-			//	}
-			//}
 			n.rePatterns = newReMap(part)
 		}
 	}
@@ -463,7 +473,7 @@ func (r *radix) put(path string, handler func(*Context)) (b bool) {
 }
 
 func (r *radix) getRec(n *node, path string) (t *node) {
-	if n.rePatterns == nil || len(n.rePatterns.keys) == 0 {
+	if n.rePatterns == nil || n.rePatterns.len() == 0 {
 		// current node has plain text part, compare with path and call recursively with child and tail, then return found node.
 		// find child firstly from plain text children map, if child is not found, loop call with every regex child with tail, find the first not null node.
 		if tail, ok := strings.CutPrefix(path, n.part); ok {
@@ -482,7 +492,6 @@ func (r *radix) getRec(n *node, path string) (t *node) {
 			}
 		}
 	} else {
-
 	}
 	return
 }
