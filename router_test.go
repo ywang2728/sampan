@@ -115,9 +115,10 @@ func TestLruLen(t *testing.T) {
 
 func TestLruPut(t *testing.T) {
 	for _, tc := range LruTcs {
+		var params map[string]string
 		l := newLru(tc.cap)
 		for _, n := range tc.nodes {
-			l.put(n.path, n.node)
+			l.put(n.path, n.node, params)
 		}
 		size := tc.cap
 		if len(tc.nodes) < tc.cap {
@@ -144,9 +145,10 @@ func TestLruGet(t *testing.T) {
 		}
 		assert.Equal(t, size, l.len())
 		for i := 0; i < size; i++ {
-			n := l.get(tc.nodes[i].path)
+			n, params := l.get(tc.nodes[i].path)
 			assert.Equal(t, tc.nodes[i].path, n.part)
 			assert.Equal(t, tc.nodes[i].path, l.nodes.Front().Value.(*lruNode).path)
+			assert.Nil(t, params)
 		}
 	}
 }
@@ -617,7 +619,8 @@ func TestGetRecPlainTextPath(t *testing.T) {
 	assert.Equal(t, len(tcs), r.len())
 	fmt.Println(r)
 	for _, tc := range tcs {
-		n := r.getRec(r.root, tc.path)
+		var params map[string]string
+		n := r.getRec(r.root, tc.path, params)
 		if n != nil {
 			n.handler(nil)
 		} else {

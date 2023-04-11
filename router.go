@@ -43,8 +43,9 @@ type (
 	}
 
 	lruNode struct {
-		path string
-		node *node
+		path   string
+		node   *node
+		params map[string]string
 	}
 
 	lru struct {
@@ -82,7 +83,7 @@ func (l *lru) clear() {
 func (l *lru) len() int {
 	return l.nodes.Len()
 }
-func (l *lru) put(path string, node *node) {
+func (l *lru) put(path string, node *node, params map[string]string) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	if e, ok := l.paths[path]; ok {
@@ -91,15 +92,16 @@ func (l *lru) put(path string, node *node) {
 		if l.nodes.Len() == l.cap {
 			delete(l.paths, l.nodes.Remove(l.nodes.Back()).(*lruNode).path)
 		}
-		l.paths[path] = l.nodes.PushFront(&lruNode{path: path, node: node})
+		l.paths[path] = l.nodes.PushFront(&lruNode{path: path, node: node, params: params})
 	}
 }
-func (l *lru) get(path string) (n *node) {
+func (l *lru) get(path string) (n *node, params map[string]string) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	if e, ok := l.paths[path]; ok {
 		l.nodes.MoveToFront(e)
 		n = e.Value.(*lruNode).node
+		params = e.Value.(*lruNode).params
 	}
 	return
 }
@@ -472,17 +474,17 @@ func (r *radix) put(path string, handler func(*Context)) (b bool) {
 	return
 }
 
-func (r *radix) getRec(n *node, path string) (t *node) {
+func (r *radix) getRec(n *node, path string, params map[string]string) (t *node) {
 	if n.rePatterns == nil || n.rePatterns.len() == 0 {
 		// current node has plain text part, compare with path and call recursively with child and tail, then return found node.
 		// find child firstly from plain text children map, if child is not found, loop call with every regex child with tail, find the first not null node.
 		if tail, ok := strings.CutPrefix(path, n.part); ok {
 			if len(tail) > 0 {
 				if child, ok := n.children[parseKey(tail)]; ok {
-					t = r.getRec(child, tail)
+					t = r.getRec(child, tail, params)
 				} else {
 					for _, reChild := range n.reChildren {
-						if t = r.getRec(reChild, tail); t != nil {
+						if t = r.getRec(reChild, tail, params); t != nil {
 							break
 						}
 					}
@@ -492,32 +494,37 @@ func (r *radix) getRec(n *node, path string) (t *node) {
 			}
 		}
 	} else {
+		if params == nil {
+			params = make(map[string]string)
+		}
 	}
 	return
 }
 
 // Get handler from cache by path, if it's not exist, get recursively from tree.
-func (r *radix) get(path string) func(*Context) {
+func (r *radix) get(path string) (func(*Context), map[string]string) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
-	n := r.cache.get(path)
+	n, params := r.cache.get(path)
 	if n == nil {
 		if r.root == nil {
-			return nil
+			return nil, nil
 		}
-		if n = r.getRec(r.root, path); n != nil {
-			r.cache.put(path, n)
+		if n = r.getRec(r.root, path, params); n != nil {
+			r.cache.put(path, n, params)
 		} else {
-			return nil
+			return nil, nil
 		}
 	}
-	return n.handler
+	return n.handler, params
 }
 
+// Delete leaf node, then recursively delete parent node if it's alone
 func (r *radix) deleteRec(n *node, p string) (b bool) {
 	return true
 }
 
+// Delete root node if children lists are empty.
 func (r *radix) delete(path string) (b bool) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
