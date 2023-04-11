@@ -12,6 +12,7 @@ type Context struct {
 	Req        *http.Request
 	Path       string
 	Method     string
+	params     map[string]string
 	StatusCode int
 }
 
@@ -74,4 +75,8 @@ func (c *Context) HTML(code int, value string) {
 	if err != nil {
 		return
 	}
+}
+
+func (c *Context) setParams(params map[string]string) {
+	c.params = params
 }

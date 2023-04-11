@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -64,6 +65,13 @@ type (
 
 	router struct {
 		trees map[string]*radix
+	}
+
+	RouterGroup struct {
+		prefix      string
+		middlewares []func(*Context)
+		router      *router
+		children    map[string]*RouterGroup
 	}
 )
 
@@ -521,6 +529,7 @@ func (r *radix) get(path string) (func(*Context), map[string]string) {
 
 // Delete leaf node, then recursively delete parent node if it's alone
 func (r *radix) deleteRec(n *node, p string) (b bool) {
+	fmt.Println(n, p)
 	return true
 }
 
@@ -529,14 +538,21 @@ func (r *radix) delete(path string) (b bool) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	if r.deleteRec(r.root, path) {
-		r.size--
-		if strings.Contains(path, "{") {
+		if len(r.root.children) == 0 && len(r.root.reChildren) == 0 {
+			r.root = nil
+			r.size = 0
 			r.cache.clear()
 		} else {
-			r.cache.delete(path)
+			r.size--
+			if strings.Contains(path, "{") {
+				r.cache.clear()
+			} else {
+				r.cache.delete(path)
+			}
 		}
+		b = true
 	}
-	return false
+	return
 }
 
 func newRouter() *router {
@@ -573,22 +589,61 @@ func (r *router) put(method string, path string, handler func(*Context)) {
 	r.trees[method].put(path, handler)
 }
 
-func (r *router) get(method string, path string) (handler func(*Context)) {
+func (r *router) get(method string, path string) (handler func(*Context), params map[string]string) {
 	log.Printf("Get route %4s - %s", method, path)
 	if path[0] != '/' {
 		panic("Path must begin with '/'!")
 	}
-	if _, ok := r.trees[method]; ok {
-		//return tree.get(path)
+	if tree, ok := r.trees[method]; ok {
+		handler, params = tree.get(path)
 	}
-	return nil
+	return
 }
 
 func (r *router) delete(method string, path string) (b bool) {
 	log.Printf("Delete route %4s - %s", method, path)
-
-	if _, ok := r.trees[method]; ok {
-		//return tree.delete(path)
+	if path[0] != '/' {
+		panic("Path must begin with '/'!")
 	}
-	return false
+	if tree, ok := r.trees[method]; ok {
+		b = tree.delete(path)
+	}
+	return
+}
+
+func newDefaultGroup(r *router, middlewares []func(*Context), children map[string]*RouterGroup) *RouterGroup {
+	return &RouterGroup{prefix: "", router: r, middlewares: middlewares, children: children}
+}
+func (rg *RouterGroup) RouterGroup(prefix string, middlewares []func(*Context), children map[string]*RouterGroup) (g *RouterGroup) {
+	if _, ok := rg.children[prefix]; ok {
+		log.Fatalf("RouterGroup creating error, #%v", errors.New(`duplicated group prefix:`+prefix))
+	} else {
+		g = &RouterGroup{prefix: prefix, router: rg.router, middlewares: middlewares, children: children}
+		rg.children[prefix] = g
+	}
+	return
+}
+
+func (rg *RouterGroup) GetRoute(method string, path string) (handler func(*Context), params map[string]string) {
+	return rg.router.get(method, path)
+}
+
+func (rg *RouterGroup) AddRoute(method string, path string, handler func(*Context)) {
+	rg.router.put(method, path, handler)
+}
+
+func (rg *RouterGroup) GET(path string, handler func(*Context)) {
+	rg.AddRoute(http.MethodGet, path, handler)
+}
+
+func (rg *RouterGroup) POST(path string, handler func(*Context)) {
+	rg.AddRoute(http.MethodPost, path, handler)
+}
+
+func (rg *RouterGroup) PUT(path string, handler func(*Context)) {
+	rg.AddRoute(http.MethodPut, path, handler)
+}
+
+func (rg *RouterGroup) DELETE(path string, handler func(*Context)) {
+	rg.AddRoute(http.MethodDelete, path, handler)
 }

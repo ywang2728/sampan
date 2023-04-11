@@ -1,15 +1,24 @@
 package sampan
 
+import (
+	"log"
+	"net/http"
+)
+
 type Server struct {
-	router *router
+	group *RouterGroup
 }
 
 func New() *Server {
-	return &Server{router: newRouter()}
+	return &Server{group: newDefaultGroup(newRouter(), nil, nil)}
 }
 
-/*func (s *Server) AddRoute(method string, path string, handler func(*Context)) {
-	s.router.put(method, path, handler)
+func (s *Server) RouterGroup(prefix string, middlewares []func(*Context), children map[string]*RouterGroup) (rg *RouterGroup) {
+	return s.group.RouterGroup(prefix, middlewares, children)
+}
+
+func (s *Server) AddRoute(method string, path string, handler func(*Context)) {
+	s.group.AddRoute(method, path, handler)
 }
 
 func (s *Server) GET(path string, handler func(*Context)) {
@@ -30,8 +39,9 @@ func (s *Server) DELETE(path string, handler func(*Context)) {
 
 func (s *Server) handle(c *Context) {
 	log.Printf("Handle %4s - %s", c.Method, c.Path)
-	handler := s.router.get(c.Method, c.Path)
+	handler, params := s.group.GetRoute(c.Method, c.Path)
 	if handler != nil {
+		c.setParams(params)
 		handler(c)
 	} else {
 		c.String(http.StatusNotFound, "404 NOT FOUND: %s\n", c.Path)
@@ -44,4 +54,4 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 func (s *Server) Run(addr string) (err error) {
 	return http.ListenAndServe(addr, s)
-}*/
+}

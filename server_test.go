@@ -8,5 +8,5 @@ import (
 func TestNew(t *testing.T) {
 	s := New()
 	assert.NotNil(t, s)
-	assert.NotNil(t, s.router)
+	assert.NotNil(t, s.group)
 }
