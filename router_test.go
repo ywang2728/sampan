@@ -3,6 +3,7 @@ package sampan
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -172,39 +173,6 @@ func TestLruDelete(t *testing.T) {
 	}
 }
 
-func TestLcp(t *testing.T) {
-	tcs := []struct {
-		s1  string
-		s2  string
-		idx int
-		cp  string
-	}{
-		{s1: "/", s2: "1", idx: -1, cp: ""},
-		{s1: "/", s2: "/", idx: 0, cp: "/"},
-		{s1: "/1", s2: "1", idx: -1, cp: ""},
-		{s1: "/1", s2: "/1", idx: 0, cp: "/1"},
-		{s1: "/1/", s2: "/2/", idx: 0, cp: "/"},
-		{s1: "/1/", s2: "/1/", idx: 2, cp: "/1/"},
-		{s1: "/1/2/", s2: "/1/2", idx: 2, cp: "/1/2"},
-		{s1: "/", s2: "/", idx: 0, cp: "/"},
-		{s1: "/", s2: "/123", idx: 0, cp: "/"},
-		{s1: "/123", s2: "/", idx: 0, cp: "/"},
-		{s1: "/12/456", s2: "/12/567", idx: 3, cp: "/12/"},
-		{s1: "/12/456", s2: "/12/456/", idx: 3, cp: "/12/456"},
-		{s1: "/:123/456", s2: "/*123/567", idx: 0, cp: "/"},
-		{s1: "/123/4/56", s2: "/123/4/57", idx: 6, cp: "/123/4/"},
-		{s1: "/123/4/5/6", s2: "/123/4/5/7", idx: 8, cp: "/123/4/5/"},
-		{s1: "/123/4/56/", s2: "/123/4/56", idx: 6, cp: "/123/4/56"},
-		{s1: "/123/4/56/", s2: "/123/4/56/", idx: 9, cp: "/123/4/56/"},
-		{s1: "/123/4/56", s2: "/123/4/56", idx: 6, cp: "/123/4/56"},
-	}
-	for _, tc := range tcs {
-		cp, idx := commonPrefix(tc.s1, tc.s2)
-		assert.Equal(t, tc.idx, idx)
-		assert.Equal(t, tc.cp, cp)
-	}
-}
-
 func TestParsePref(t *testing.T) {
 	tcs := []struct {
 		path string
@@ -242,7 +210,7 @@ func TestParsePref(t *testing.T) {
 		{path: "123/123{abc}/", idx: 3, eof: false},
 	}
 	for _, tc := range tcs {
-		idx, eof := parsePref(tc.path)
+		idx, eof := parsePrefix(tc.path)
 		assert.Equal(t, tc.idx, idx)
 		assert.Equal(t, tc.eof, eof)
 	}
@@ -289,148 +257,83 @@ func TestParseKey(t *testing.T) {
 	}
 }
 
-func TestParseRe(t *testing.T) {
+func TestParseRePatterns(t *testing.T) {
 	tcs := []struct {
-		part string
-		exps []string
-		cnt  int
+		part     string
+		patterns []rePattern
 	}{
-		{part: "{abc}/", exps: []string{"abc"}, cnt: 1},
-		{part: "{abc:abc}/", exps: []string{"abc:abc"}, cnt: 1},
-		{part: "hello-{abc}-{def}haha/", exps: []string{"abc", "def"}, cnt: 2},
-		{part: "hello-{abc:ccc}-{def}haha/", exps: []string{"abc:ccc", "def"}, cnt: 2},
-		{part: "{ab::c}/", exps: []string{"ab::c"}, cnt: 1},
-		{part: "{abc:[a-z]+}/", exps: []string{"abc:[a-z]+"}, cnt: 1},
-		{part: "{abc:[a-z]{3-5}}/", exps: []string{"abc:[a-z]{3-5}"}, cnt: 1},
-		{part: "123-{abc:[a-z]{3-5}}-567-{haha:\\w+}--world/", exps: []string{"abc:[a-z]{3-5}", "haha:\\w+"}, cnt: 2},
-		{part: "123-{abc:[a-z]{3-5}}-567-{haha:\\w+}--world++{a1:[0-9][0-9]?}ll/", exps: []string{"abc:[a-z]{3-5}", "haha:\\w+", "a1:[0-9][0-9]?"}, cnt: 3},
+		{"/", []rePattern{{"/", nil}}},
+		{"/abc", []rePattern{{"/abc", nil}}},
+		{"abc/", []rePattern{{"abc/", nil}}},
+		{"/abc/", []rePattern{{"/abc/", nil}}},
+		{"/abc/def", []rePattern{{"/abc/def", nil}}},
+		{"abc/def/", []rePattern{{"abc/def/", nil}}},
+		{"/abc/def/", []rePattern{{"/abc/def/", nil}}},
+		{"{abc}", []rePattern{{"{abc}", regexp.MustCompile("^abc$")}}},
+		{"/{abc}", []rePattern{{"/", nil}, {"{abc}", regexp.MustCompile("^abc$")}}},
+		{"{abc}/", []rePattern{{"{abc}", regexp.MustCompile("^abc$")}, {"/", nil}}},
+		{"/{abc}/", []rePattern{{"/", nil}, {"{abc}", regexp.MustCompile("^abc$")}, {"/", nil}}},
+		{"123{abc}", []rePattern{{"123", nil}, {"{abc}", regexp.MustCompile("^abc$")}}},
+		{"/123{abc}", []rePattern{{"/123", nil}, {"{abc}", regexp.MustCompile("^abc$")}}},
+		{"123{abc}/", []rePattern{{"123", nil}, {"{abc}", regexp.MustCompile("^abc$")}, {"/", nil}}},
+		{"/123{abc}/", []rePattern{{"/123", nil}, {"{abc}", regexp.MustCompile("^abc$")}, {"/", nil}}},
+		{"123{abc}789", []rePattern{{"123", nil}, {"{abc}", regexp.MustCompile("^abc$")}, {"789", nil}}},
+		{"/123{abc}789", []rePattern{{"/123", nil}, {"{abc}", regexp.MustCompile("^abc$")}, {"789", nil}}},
+		{"123{abc}789/", []rePattern{{"123", nil}, {"{abc}", regexp.MustCompile("^abc$")}, {"789/", nil}}},
+		{"/123{abc}789/", []rePattern{{"/123", nil}, {"{abc}", regexp.MustCompile("^abc$")}, {"789/", nil}}},
+		{"{[1-9]+}{[a-z]+}", []rePattern{{"{[1-9]+}", regexp.MustCompile("^[1-9]+$")}, {"{[a-z]+}", regexp.MustCompile("^[a-z]+$")}}},
+		{"/{[1-9]+}{[a-z]+}", []rePattern{{"/", nil}, {"{[1-9]+}", regexp.MustCompile("^[1-9]+$")}, {"{[a-z]+}", regexp.MustCompile("^[a-z]+$")}}},
+		{"{[1-9]+}{[a-z]+}/", []rePattern{{"{[1-9]+}", regexp.MustCompile("^[1-9]+$")}, {"{[a-z]+}", regexp.MustCompile("^[a-z]+$")}, {"/", nil}}},
+		{"/{[1-9]+}{[a-z]+}/", []rePattern{{"/", nil}, {"{[1-9]+}", regexp.MustCompile("^[1-9]+$")}, {"{[a-z]+}", regexp.MustCompile("^[a-z]+$")}, {"/", nil}}},
 	}
 	for _, tc := range tcs {
-		assert.Equal(t, len(parseRe(tc.part)), tc.cnt)
-		assert.Equal(t, parseRe(tc.part), tc.exps)
-	}
-}
-
-func TestParseRePattern(t *testing.T) {
-	tcs := []struct {
-		part string
-		bef  string
-		aft  string
-		isRe bool
-	}{
-		{part: "/", bef: "/", aft: "", isRe: false},
-		{part: "hello/", bef: "hello/", aft: "", isRe: false},
-		{part: "hello{name}/", bef: "hello", aft: "{name}/", isRe: false},
-		{part: "{abc:abc}/", bef: "{abc:abc}", aft: "/", isRe: true},
-		{part: "{ab::c}/", bef: "{ab::c}", aft: "/", isRe: true},
-		{part: "hello-{abc}-{def}haha/", bef: "hello-", aft: "{abc}-{def}haha/", isRe: false},
-		{part: "{abc:[a-z]+}/", bef: "{abc:[a-z]+}", aft: "/", isRe: true},
-		{part: "{abc}", bef: "{abc}", aft: "", isRe: true},
-		{part: "{abc}/", bef: "{abc}", aft: "/", isRe: true},
-		{part: "{abc}world", bef: "{abc}", aft: "world", isRe: true},
-		{part: "{abc}world/", bef: "{abc}", aft: "world/", isRe: true},
-		{part: "{abc}-world/", bef: "{abc}", aft: "-world/", isRe: true},
-		{part: "{abc:[a-z]{3-5}}/", bef: "{abc:[a-z]{3-5}}", aft: "/", isRe: true},
-		{part: "123-{abc:[a-z]{3-5}}-567-{haha:\\w+}--world/", bef: "123-", aft: "{abc:[a-z]{3-5}}-567-{haha:\\w+}--world/", isRe: false},
-		{part: "{abc:[a-z]{3-5}}-567-{haha:\\w+}--world++{a1:[0-9][0-9]?}ll/", bef: "{abc:[a-z]{3-5}}", aft: "-567-{haha:\\w+}--world++{a1:[0-9][0-9]?}ll/", isRe: true},
-	}
-	for _, tc := range tcs {
-		bef, aft, isRe := parseRePattern(tc.part)
-		assert.Equal(t, tc.bef, bef)
-		assert.Equal(t, tc.aft, aft)
-		assert.Equal(t, tc.isRe, isRe)
-	}
-}
-
-func TestNewReMap(t *testing.T) {
-	tcs := []struct {
-		part string
-		divs []string
-		exps map[string]string
-	}{
-		{part: "/", divs: []string{"/"}, exps: map[string]string{}},
-		{part: "/abc", divs: []string{"/abc"}, exps: map[string]string{}},
-		{part: "abc", divs: []string{"abc"}, exps: map[string]string{}},
-		{part: "abc/", divs: []string{"abc/"}, exps: map[string]string{}},
-		{part: "{abc}", divs: []string{"{abc}"}, exps: map[string]string{"abc": `\S*`}},
-		{part: "/{abc}", divs: []string{"/", "{abc}"}, exps: map[string]string{"abc": `\S*`}},
-		{part: "{abc}/", divs: []string{"{abc}", "/"}, exps: map[string]string{"abc": `\S*`}},
-		{part: "/{abc}/", divs: []string{"/", "{abc}", "/"}, exps: map[string]string{"abc": `\S*`}},
-		{part: "{abc}world", divs: []string{"{abc}", "world"}, exps: map[string]string{"abc": `\S*`}},
-		{part: "/{abc}world", divs: []string{"/", "{abc}", "world"}, exps: map[string]string{"abc": `\S*`}},
-		{part: "{abc}world/", divs: []string{"{abc}", "world/"}, exps: map[string]string{"abc": `\S*`}},
-		{part: "/{abc}world/", divs: []string{"/", "{abc}", "world/"}, exps: map[string]string{"abc": `\S*`}},
-		{part: "{abc}/world/", divs: []string{"{abc}", "/world/"}, exps: map[string]string{"abc": `\S*`}},
-		{part: "/{abc}/world/", divs: []string{"/", "{abc}", "/world/"}, exps: map[string]string{"abc": `\S*`}},
-		{part: "hello{name}/", divs: []string{"hello", "{name}", "/"}, exps: map[string]string{"name": `\S*`}},
-		{part: "{abc:abc}/", divs: []string{"{abc:abc}", "/"}, exps: map[string]string{"abc": `abc`}},
-		{part: "{ab::c}/", divs: []string{"{ab::c}", "/"}, exps: map[string]string{"ab": `:c`}},
-		{
-			part: "hello-{abc}-{def}haha/",
-			divs: []string{"hello-", "{abc}", "-", "{def}", "haha/"},
-			exps: map[string]string{"abc": `\S*`, "def": `\S*`},
-		},
-		{part: "{abc:[a-z]+}/", divs: []string{"{abc:[a-z]+}", "/"}, exps: map[string]string{"abc": `[a-z]+`}},
-		{part: "{abc:[a-z]{3-5}}/", divs: []string{"{abc:[a-z]{3-5}}", "/"}, exps: map[string]string{"abc": `[a-z]{3-5}`}},
-		{
-			part: "123-{abc:[a-z]{3-5}}-567-{haha:\\w+}--world/",
-			divs: []string{"123-", "{abc:[a-z]{3-5}}", "-567-", "{haha:\\w+}", "--world/"},
-			exps: map[string]string{"abc": `[a-z]{3-5}`, "haha": `\w+`},
-		},
-		{
-			part: "{abc:[a-z]{3-5}}-567-{haha:\\w+}--world++{a1:[0-9][0-9]?}ll/",
-			divs: []string{"{abc:[a-z]{3-5}}", "-567-", "{haha:\\w+}", "--world++", "{a1:[0-9][0-9]?}", "ll/"},
-			exps: map[string]string{"abc": `[a-z]{3-5}`, "haha": `\w+`, "a1": `[0-9][0-9]?`},
-		},
-	}
-	for _, tc := range tcs {
-		rm := newReMap(tc.part)
-		assert.NotNil(t, rm)
-		assert.Equal(t, len(tc.divs), rm.len())
-		for _, v := range rm.divs {
-			assert.Contains(t, tc.divs, v)
+		rePatterns := parseRePatterns(tc.part)
+		assert.Equal(t, len(tc.patterns), len(rePatterns))
+		for i := 0; i < len(rePatterns); i++ {
+			assert.Equal(t, tc.patterns[i].raw, rePatterns[i].raw)
+			if rePatterns[i].compiled != nil {
+				assert.Equal(t, tc.patterns[i].compiled.String(), rePatterns[i].compiled.String())
+				//fmt.Printf("{raw: %s, compiled: %s}\n", rePatterns[i].raw, rePatterns[i].compiled.String())
+			} else {
+				//fmt.Printf("{raw: %s, compiled: %v}\n", rePatterns[i].raw, nil)
+			}
 		}
-		for k, v := range rm.exps {
-			v2, ok := tc.exps[k]
-			assert.True(t, ok)
-			assert.Equal(t, v2, v.String())
-		}
+		//println()
 	}
-
 }
 
 func TestNewNode(t *testing.T) {
 	tcs := []struct {
-		part string
-		divs []string
-		exps map[string]string
+		part       string
+		rePatterns []rePattern
 	}{
-		{part: "/", divs: nil, exps: nil},
-		{part: "abc/", divs: nil, exps: nil},
-		{part: "{abc}/", divs: []string{"{abc}", "/"}, exps: map[string]string{"abc": `\S*`}},
-		{part: "{abc:\\w+}/", divs: []string{"{abc:\\w+}", "/"}, exps: map[string]string{"abc": `\w+`}},
-		{part: "{abc:[a-z][0-9]?}/", divs: []string{"{abc:[a-z][0-9]?}", "/"}, exps: map[string]string{"abc": `[a-z][0-9]?`}},
-		{part: "hello-{abc:[a-z]+}!/", divs: []string{"hello-", "{abc:[a-z]+}", "!/"}, exps: map[string]string{"abc": `[a-z]+`}},
+		{"/", nil},
+		{"abc/", nil},
+		{"{abc}/", []rePattern{{"{abc}", regexp.MustCompile(`^abc$`)}, {"/", nil}}},
+		{"{\\w+}/", []rePattern{{"{\\w+}", regexp.MustCompile(`^\w+$`)}, {"/", nil}}},
+		{"{(?P<date>[a-z][0-9]?)}/", []rePattern{{"{(?P<date>[a-z][0-9]?)}", regexp.MustCompile(`^(?P<date>[a-z][0-9]?)$`)}, {"/", nil}}},
+		{"hello-{(?P<abc>[a-z]+)}!/", []rePattern{{"hello-", nil}, {"{(?P<abc>[a-z]+)}", regexp.MustCompile(`^(?P<abc>[a-z]+)$`)}, {"!/", nil}}},
 		{
-			part: "hello-{abc:[a-z]+}!=bonjour-{def:[\\d][\\w]*}/",
-			divs: []string{"hello-", "{abc:[a-z]+}", "!=bonjour-", "{def:[\\d][\\w]*}", "/"},
-			exps: map[string]string{"abc": `[a-z]+`, "def": "[\\d][\\w]*"}},
+			"hello-{(?P<abc>[a-z]+)}!=bonjour-{(?P<def>\\d\\w*)}-world/",
+			[]rePattern{
+				{"hello-", nil},
+				{"{(?P<abc>[a-z]+)}", regexp.MustCompile(`^(?P<abc>[a-z]+)$`)},
+				{"!=bonjour-", nil},
+				{"{(?P<def>\\d\\w*)}", regexp.MustCompile(`^(?P<def>\d\w*)$`)},
+				{"-world/", nil}}},
 	}
 	for _, tc := range tcs {
 		n := newNode(tc.part)
 		assert.NotNil(t, n)
 		assert.Equal(t, tc.part, n.part)
-		if tc.exps == nil {
+		if tc.rePatterns == nil {
 			assert.Nil(t, n.rePatterns)
 		} else {
-			for _, v := range n.rePatterns.divs {
-				assert.Contains(t, tc.divs, v)
-			}
-			assert.Equal(t, len(n.rePatterns.exps), len(tc.exps))
-			for k, v := range n.rePatterns.exps {
-				v2, ok := tc.exps[k]
-				assert.True(t, ok)
-				assert.Equal(t, v2, v.String())
+			for i := 0; i < len(n.rePatterns); i++ {
+				assert.Equal(t, tc.rePatterns[i].raw, n.rePatterns[i].raw)
+				if n.rePatterns[i].compiled != nil {
+					assert.Equal(t, tc.rePatterns[i].compiled.String(), n.rePatterns[i].compiled.String())
+				}
 			}
 		}
 		assert.NotNil(t, n.children)
@@ -490,23 +393,26 @@ func TestRadixPutRecNewSinglePlainTextPath(t *testing.T) {
 
 func TestRadixPutRecNewSingleRegexPath(t *testing.T) {
 	tcs := []struct {
-		path      string
-		part      string
-		reDivs    []string
-		reExpsKey string
-		reExpsStr string
+		path       string
+		part       string
+		rePatterns []rePattern
 	}{
-		{path: "{abc}/", part: "{abc}/", reDivs: []string{"{abc}", "/"}, reExpsKey: "abc", reExpsStr: `\S*`},
-		{path: "123{abc}/", part: "123{abc}/", reDivs: []string{"123", "{abc}", "/"}, reExpsKey: "abc", reExpsStr: `\S*`},
+		{"{abc}/", "{abc}/", []rePattern{{"{abc}", regexp.MustCompile(`^abc$`)}, {"/", nil}}},
+		{"123{abc}/", "123{abc}/", []rePattern{{"123", nil}, {"{abc}", regexp.MustCompile(`^abc$`)}, {"/", nil}}},
 	}
 	for _, tc := range tcs {
 		r := newRadix()
 		n := r.putRec(nil, tc.path, func(context *Context) {})
 		assert.NotNil(t, n)
 		assert.Equal(t, tc.part, n.part)
-		assert.Equal(t, len(tc.reDivs), n.rePatterns.len())
-		assert.Equal(t, 1, len(n.rePatterns.exps))
-		assert.Equal(t, tc.reExpsStr, n.rePatterns.exps[tc.reExpsKey].String())
+		assert.Equal(t, len(tc.rePatterns), len(n.rePatterns))
+		for i := 0; i < len(n.rePatterns); i++ {
+			assert.Equal(t, tc.rePatterns[i].raw, n.rePatterns[i].raw)
+			if n.rePatterns[i].compiled != nil {
+				assert.Equal(t, tc.rePatterns[i].compiled.String(), n.rePatterns[i].compiled.String())
+			}
+		}
+
 	}
 }
 
@@ -618,15 +524,18 @@ func TestGetRecPlainTextPath(t *testing.T) {
 	assert.NotNil(t, r)
 	assert.Equal(t, len(tcs), r.len())
 	fmt.Println(r)
+	var cnt []*node
 	for _, tc := range tcs {
 		var params map[string]string
 		n := r.getRec(r.root, tc.path, params)
 		if n != nil {
+			cnt = append(cnt, n)
 			n.handler(nil)
 		} else {
 			fmt.Println("n is nil")
 		}
 	}
+	assert.Equal(t, len(tcs), len(cnt))
 }
 
 func TestNewRouter(t *testing.T) {
