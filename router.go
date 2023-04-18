@@ -138,7 +138,7 @@ func (rd *reDelim) load() int32 {
 
 func parseRePatterns(part string) (patterns []*rePattern) {
 	patterns = []*rePattern{}
-	for {
+	for len(part) != 0 {
 		if i := strings.Index(part, string(ReDelimBgn)); i == -1 {
 			patterns, part = append(patterns, &rePattern{part, nil}), ""
 		} else if i == 0 {
@@ -157,14 +157,7 @@ func parseRePatterns(part string) (patterns []*rePattern) {
 					if l < 3 {
 						log.Fatalf("Expression parsing error, #%v", errors.New(`invalid expression:`+before))
 					}
-					toCompile := before[1 : l-1]
-					if !strings.HasPrefix(toCompile, "^") {
-						toCompile = "^" + toCompile
-					}
-					if !strings.HasSuffix(toCompile, "$") {
-						toCompile = toCompile + "$"
-					}
-					patterns, part = append(patterns, &rePattern{before, regexp.MustCompile(toCompile)}), after
+					patterns, part = append(patterns, &rePattern{before, regexp.MustCompile(before[1 : l-1])}), after
 					break
 				}
 			}
@@ -174,9 +167,6 @@ func parseRePatterns(part string) (patterns []*rePattern) {
 		} else {
 			patterns = append(patterns, &rePattern{part[:i], nil})
 			part = part[i:]
-		}
-		if len(part) == 0 {
-			break
 		}
 	}
 	return
@@ -381,67 +371,46 @@ func (r *radix) put(path string, handler func(*Context)) (b bool) {
 
 func (r *radix) getRec(n *node, path string, params map[string]string) (t *node) {
 	isMatched := true
-	matched := strings.Builder{}
+	before := strings.Builder{}
 	if n.rePatterns == nil {
-		matched.WriteString(n.part)
+		before.WriteString(n.part)
 	} else {
-		if params == nil && len(n.rePatterns) > 0 {
-			params = make(map[string]string)
-		}
-		//TODO - way to match url with rePatterns,
-		/*tail := path
-		l := n.rePatterns.len()
-
-		for idx, div := range n.rePatterns.divs {
-			if strings.Contains(div, string(ReDelimBgn)) {
-				expKey := div[1 : len(div)-1]
-				if exp, ok := n.rePatterns.exps[expKey]; ok {
-					nextDiv := n.rePatterns.divs[idx+1]
-					if idx < l-1 && !strings.Contains(nextDiv, string(ReDelimBgn)) {
-						nextIdx := strings.Index(tail, nextDiv)
-						if nextIdx < 2 {
-							isMatched = false
-						} else {
-							toBeMatched := tail[:nextIdx]
-							if exp.MatchString(toBeMatched) {
-								matched.WriteString(toBeMatched)
-								params[expKey] = toBeMatched
-								tail = tail[nextIdx:]
-							} else {
-								isMatched = false
+		for i, p, l := 0, path, len(n.rePatterns); i < l && isMatched; i++ {
+			ptn := n.rePatterns[i]
+			if ptn.compiled == nil {
+				if p, isMatched = strings.CutPrefix(p, ptn.raw); isMatched {
+					before.WriteString(ptn.raw)
+				}
+			} else {
+				if loc := ptn.compiled.FindStringIndex(p); loc != nil && loc[0] == 0 {
+					if i != l-1 || loc[1] == len(p) || p[loc[1]] == '/' {
+						toBeMatched := p[loc[0]:loc[1]]
+						if p, isMatched = strings.CutPrefix(p, toBeMatched); isMatched {
+							before.WriteString(toBeMatched)
+							if names := ptn.compiled.SubexpNames(); len(names) > 1 {
+								for i, match := range ptn.compiled.FindStringSubmatch(p) {
+									if len(names[i]) != 0 {
+										params[names[i]] = match
+									}
+								}
 							}
 						}
 					} else {
-						toBeMatched := exp.FindString(tail)
-						if len(toBeMatched) > 0 {
-							matched.WriteString(toBeMatched)
-							params[expKey] = toBeMatched
-							tail, _ = strings.CutPrefix(tail, toBeMatched)
-						} else {
-							isMatched = false
-						}
+						isMatched = false
 					}
 				} else {
 					isMatched = false
 				}
-			} else {
-				tail, isMatched = strings.CutPrefix(tail, div)
-				if isMatched {
-					matched.WriteString(div)
-				}
 			}
-			if !isMatched {
-				break
-			}
-		}*/
+		}
 	}
-	if tail, ok := strings.CutPrefix(path, matched.String()); isMatched && ok {
-		if len(tail) > 0 {
-			if child, ok := n.children[parseKey(tail)]; ok {
-				t = r.getRec(child, tail, params)
+	if after, ok := strings.CutPrefix(path, before.String()); isMatched && ok {
+		if len(after) > 0 {
+			if child, ok := n.children[parseKey(after)]; ok {
+				t = r.getRec(child, after, params)
 			} else {
 				for _, reChild := range n.reChildren {
-					if t = r.getRec(reChild, tail, params); t != nil {
+					if t = r.getRec(reChild, after, params); t != nil {
 						break
 					}
 				}
@@ -462,6 +431,7 @@ func (r *radix) get(path string) (func(*Context), map[string]string) {
 		if r.root == nil {
 			return nil, nil
 		}
+		params := make(map[string]string)
 		if n = r.getRec(r.root, path, params); n != nil {
 			r.cache.put(path, n, params)
 		} else {

@@ -269,22 +269,22 @@ func TestParseRePatterns(t *testing.T) {
 		{"/abc/def", []rePattern{{"/abc/def", nil}}},
 		{"abc/def/", []rePattern{{"abc/def/", nil}}},
 		{"/abc/def/", []rePattern{{"/abc/def/", nil}}},
-		{"{abc}", []rePattern{{"{abc}", regexp.MustCompile("^abc$")}}},
-		{"/{abc}", []rePattern{{"/", nil}, {"{abc}", regexp.MustCompile("^abc$")}}},
-		{"{abc}/", []rePattern{{"{abc}", regexp.MustCompile("^abc$")}, {"/", nil}}},
-		{"/{abc}/", []rePattern{{"/", nil}, {"{abc}", regexp.MustCompile("^abc$")}, {"/", nil}}},
-		{"123{abc}", []rePattern{{"123", nil}, {"{abc}", regexp.MustCompile("^abc$")}}},
-		{"/123{abc}", []rePattern{{"/123", nil}, {"{abc}", regexp.MustCompile("^abc$")}}},
-		{"123{abc}/", []rePattern{{"123", nil}, {"{abc}", regexp.MustCompile("^abc$")}, {"/", nil}}},
-		{"/123{abc}/", []rePattern{{"/123", nil}, {"{abc}", regexp.MustCompile("^abc$")}, {"/", nil}}},
-		{"123{abc}789", []rePattern{{"123", nil}, {"{abc}", regexp.MustCompile("^abc$")}, {"789", nil}}},
-		{"/123{abc}789", []rePattern{{"/123", nil}, {"{abc}", regexp.MustCompile("^abc$")}, {"789", nil}}},
-		{"123{abc}789/", []rePattern{{"123", nil}, {"{abc}", regexp.MustCompile("^abc$")}, {"789/", nil}}},
-		{"/123{abc}789/", []rePattern{{"/123", nil}, {"{abc}", regexp.MustCompile("^abc$")}, {"789/", nil}}},
-		{"{[1-9]+}{[a-z]+}", []rePattern{{"{[1-9]+}", regexp.MustCompile("^[1-9]+$")}, {"{[a-z]+}", regexp.MustCompile("^[a-z]+$")}}},
-		{"/{[1-9]+}{[a-z]+}", []rePattern{{"/", nil}, {"{[1-9]+}", regexp.MustCompile("^[1-9]+$")}, {"{[a-z]+}", regexp.MustCompile("^[a-z]+$")}}},
-		{"{[1-9]+}{[a-z]+}/", []rePattern{{"{[1-9]+}", regexp.MustCompile("^[1-9]+$")}, {"{[a-z]+}", regexp.MustCompile("^[a-z]+$")}, {"/", nil}}},
-		{"/{[1-9]+}{[a-z]+}/", []rePattern{{"/", nil}, {"{[1-9]+}", regexp.MustCompile("^[1-9]+$")}, {"{[a-z]+}", regexp.MustCompile("^[a-z]+$")}, {"/", nil}}},
+		{"{abc}", []rePattern{{"{abc}", regexp.MustCompile("abc")}}},
+		{"/{abc}", []rePattern{{"/", nil}, {"{abc}", regexp.MustCompile("abc")}}},
+		{"{abc}/", []rePattern{{"{abc}", regexp.MustCompile("abc")}, {"/", nil}}},
+		{"/{abc}/", []rePattern{{"/", nil}, {"{abc}", regexp.MustCompile("abc")}, {"/", nil}}},
+		{"123{abc}", []rePattern{{"123", nil}, {"{abc}", regexp.MustCompile("abc")}}},
+		{"/123{abc}", []rePattern{{"/123", nil}, {"{abc}", regexp.MustCompile("abc")}}},
+		{"123{abc}/", []rePattern{{"123", nil}, {"{abc}", regexp.MustCompile("abc")}, {"/", nil}}},
+		{"/123{abc}/", []rePattern{{"/123", nil}, {"{abc}", regexp.MustCompile("abc")}, {"/", nil}}},
+		{"123{abc}789", []rePattern{{"123", nil}, {"{abc}", regexp.MustCompile("abc")}, {"789", nil}}},
+		{"/123{abc}789", []rePattern{{"/123", nil}, {"{abc}", regexp.MustCompile("abc")}, {"789", nil}}},
+		{"123{abc}789/", []rePattern{{"123", nil}, {"{abc}", regexp.MustCompile("abc")}, {"789/", nil}}},
+		{"/123{abc}789/", []rePattern{{"/123", nil}, {"{abc}", regexp.MustCompile("abc")}, {"789/", nil}}},
+		{"{[1-9]+}{[a-z]+}", []rePattern{{"{[1-9]+}", regexp.MustCompile("[1-9]+")}, {"{[a-z]+}", regexp.MustCompile("[a-z]+")}}},
+		{"/{[1-9]+}{[a-z]+}", []rePattern{{"/", nil}, {"{[1-9]+}", regexp.MustCompile("[1-9]+")}, {"{[a-z]+}", regexp.MustCompile("[a-z]+")}}},
+		{"{[1-9]+}{[a-z]+}/", []rePattern{{"{[1-9]+}", regexp.MustCompile("[1-9]+")}, {"{[a-z]+}", regexp.MustCompile("[a-z]+")}, {"/", nil}}},
+		{"/{[1-9]+}{[a-z]+}/", []rePattern{{"/", nil}, {"{[1-9]+}", regexp.MustCompile("[1-9]+")}, {"{[a-z]+}", regexp.MustCompile("[a-z]+")}, {"/", nil}}},
 	}
 	for _, tc := range tcs {
 		rePatterns := parseRePatterns(tc.part)
@@ -309,17 +309,17 @@ func TestNewNode(t *testing.T) {
 	}{
 		{"/", nil},
 		{"abc/", nil},
-		{"{abc}/", []rePattern{{"{abc}", regexp.MustCompile(`^abc$`)}, {"/", nil}}},
-		{"{\\w+}/", []rePattern{{"{\\w+}", regexp.MustCompile(`^\w+$`)}, {"/", nil}}},
-		{"{(?P<date>[a-z][0-9]?)}/", []rePattern{{"{(?P<date>[a-z][0-9]?)}", regexp.MustCompile(`^(?P<date>[a-z][0-9]?)$`)}, {"/", nil}}},
-		{"hello-{(?P<abc>[a-z]+)}!/", []rePattern{{"hello-", nil}, {"{(?P<abc>[a-z]+)}", regexp.MustCompile(`^(?P<abc>[a-z]+)$`)}, {"!/", nil}}},
+		{"{abc}/", []rePattern{{"{abc}", regexp.MustCompile(`abc`)}, {"/", nil}}},
+		{"{\\w+}/", []rePattern{{"{\\w+}", regexp.MustCompile(`\w+`)}, {"/", nil}}},
+		{"{(?P<date>[a-z][0-9]?)}/", []rePattern{{"{(?P<date>[a-z][0-9]?)}", regexp.MustCompile(`(?P<date>[a-z][0-9]?)`)}, {"/", nil}}},
+		{"hello-{(?P<abc>[a-z]+)}!/", []rePattern{{"hello-", nil}, {"{(?P<abc>[a-z]+)}", regexp.MustCompile(`(?P<abc>[a-z]+)`)}, {"!/", nil}}},
 		{
 			"hello-{(?P<abc>[a-z]+)}!=bonjour-{(?P<def>\\d\\w*)}-world/",
 			[]rePattern{
 				{"hello-", nil},
-				{"{(?P<abc>[a-z]+)}", regexp.MustCompile(`^(?P<abc>[a-z]+)$`)},
+				{"{(?P<abc>[a-z]+)}", regexp.MustCompile(`(?P<abc>[a-z]+)`)},
 				{"!=bonjour-", nil},
-				{"{(?P<def>\\d\\w*)}", regexp.MustCompile(`^(?P<def>\d\w*)$`)},
+				{"{(?P<def>\\d\\w*)}", regexp.MustCompile(`(?P<def>\d\w*)`)},
 				{"-world/", nil}}},
 	}
 	for _, tc := range tcs {
@@ -397,8 +397,8 @@ func TestRadixPutRecNewSingleRegexPath(t *testing.T) {
 		part       string
 		rePatterns []rePattern
 	}{
-		{"{abc}/", "{abc}/", []rePattern{{"{abc}", regexp.MustCompile(`^abc$`)}, {"/", nil}}},
-		{"123{abc}/", "123{abc}/", []rePattern{{"123", nil}, {"{abc}", regexp.MustCompile(`^abc$`)}, {"/", nil}}},
+		{"{abc}/", "{abc}/", []rePattern{{"{abc}", regexp.MustCompile(`abc`)}, {"/", nil}}},
+		{"123{abc}/", "123{abc}/", []rePattern{{"123", nil}, {"{abc}", regexp.MustCompile(`abc`)}, {"/", nil}}},
 	}
 	for _, tc := range tcs {
 		r := newRadix()
@@ -502,15 +502,22 @@ func TestRadixPutRecMixedPaths(t *testing.T) {
 func TestGetRecPlainTextPath(t *testing.T) {
 	tcs := []struct {
 		path    string
-		part    string
+		url     string
+		params  map[string]string
 		handler func(ctx *Context)
 		nodes   []map[string]string
 	}{
-		{path: "/123/toto", part: "/123/", handler: func(ctx *Context) { fmt.Println("func:", "/123/toto") }},
-		{path: "/abc/def", part: "/abc/", handler: func(ctx *Context) { fmt.Println("func:", "/abc/def") }},
-		{path: "/123/haha/", part: "1234/", handler: func(ctx *Context) { fmt.Println("func:", "/123/haha/") }},
-		{path: "/123/haha", part: "1234/", handler: func(ctx *Context) { fmt.Println("func:", "/123/haha") }},
-		{path: "/123/haha/nini", part: "1234/", handler: func(ctx *Context) { fmt.Println("func:", "/123/haha/nini") }},
+		{path: "/123/", url: "/123/", handler: func(ctx *Context) { fmt.Println("func:", "/123/") }},
+		//{path: "/abc/def", url: "/abc/def", handler: func(ctx *Context) { fmt.Println("func:", "/abc/def") }},
+		//{path: "/123/haha/", url: "/123/haha/", handler: func(ctx *Context) { fmt.Println("func:", "/123/haha/") }},
+		{path: "/123/haha", url: "/123/haha", handler: func(ctx *Context) { fmt.Println("func:", "/123/haha") }},
+		{path: "/123/haha/nini", url: "/123/haha/nini", handler: func(ctx *Context) { fmt.Println("func:", "/123/haha/nini") }},
+		//{path: "/123/{hello[0-9]{1,3}}", url: "/123/hello123", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[0-9]{1,3}}") }},
+		//{path: "/123/{hello[0-9]{1,3}}abc", url: "/123/hello123abc", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[0-9]{1,3}}abc") }},
+		//{path: "/123/{hello[A-Z]{1,3}}", url: "/123/helloABC", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[A-Z]{1,3}}") }},
+		//{path: "/123/{(?P<v1>hello[0-9]{1,3})}", url: "/123/hello123", params: map[string]string{"v1": "hello123"}, handler: func(ctx *Context) { fmt.Println("func:", "/123/{(?P<v1>hello[0-9]{1,3})}") }},
+		//{path: "/123/{hello[0-9]{1,3}}/pig", url: "/123/hello123/pig", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[0-9]{1,3}}/pig") }},
+		//{path: "/123/{(?P<v1>hello[0-9]{1,3})}/pig", url: "/123/hello123/pig", params: map[string]string{"v1": "hello123"}, handler: func(ctx *Context) { fmt.Println("func:", "/123/{(?P<v1>hello[0-9]{1,3})}/pig") }},
 	}
 	r := newRadix()
 	for _, tc := range tcs {
@@ -526,11 +533,17 @@ func TestGetRecPlainTextPath(t *testing.T) {
 	fmt.Println(r)
 	var cnt []*node
 	for _, tc := range tcs {
-		var params map[string]string
-		n := r.getRec(r.root, tc.path, params)
+		params := make(map[string]string)
+		n := r.getRec(r.root, tc.url, params)
 		if n != nil {
 			cnt = append(cnt, n)
 			n.handler(nil)
+			if tc.params != nil {
+				fmt.Printf("%+v\n", params)
+				for k, v := range tc.params {
+					assert.Equal(t, v, params[k])
+				}
+			}
 		} else {
 			fmt.Println("n is nil")
 		}
@@ -542,5 +555,5 @@ func TestNewRouter(t *testing.T) {
 	r := newRouter()
 	assert.NotNil(t, r)
 	assert.NotNil(t, r.trees)
-	fmt.Println(strings.CutPrefix("abc", "ab"))
+	fmt.Println(strings.CutPrefix("", "abc"))
 }
