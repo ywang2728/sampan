@@ -541,13 +541,16 @@ func TestGetRecPlainTextPath(t *testing.T) {
 		{path: "/123", url: "/123", handler: func(ctx *Context) { fmt.Println("func:", "/123") }},
 		{path: "/12/haha/nini", url: "/12/haha/nini", handler: func(ctx *Context) { fmt.Println("func:", "/12/haha/nini") }},
 		{path: "/12/haha/nini/", url: "/12/haha/nini/", handler: func(ctx *Context) { fmt.Println("func:", "/12/haha/nini/") }},
+		{path: "/12", url: "/12", handler: func(ctx *Context) { fmt.Println("func:", "/12/") }},
+		{path: "/12/{hello[0-9]{1,3}}", url: "/12/hello123", handler: func(ctx *Context) { fmt.Println("func:", "/12/{hello[0-9]{1,3}}") }},
 		{path: "/12/", url: "/12/", handler: func(ctx *Context) { fmt.Println("func:", "/12/") }},
-		//{path: "/123/{hello[0-9]{1,3}}", url: "/123/hello123", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[0-9]{1,3}}") }},
-		//{path: "/123/{hello[0-9]{1,3}}abc", url: "/123/hello123abc", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[0-9]{1,3}}abc") }},
-		//{path: "/123/{hello[A-Z]{1,3}}", url: "/123/helloABC", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[A-Z]{1,3}}") }},
-		//{path: "/123/{(?P<v1>hello[0-9]{1,3})}", url: "/123/hello123", params: map[string]string{"v1": "hello123"}, handler: func(ctx *Context) { fmt.Println("func:", "/123/{(?P<v1>hello[0-9]{1,3})}") }},
-		//{path: "/123/{hello[0-9]{1,3}}/pig", url: "/123/hello123/pig", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[0-9]{1,3}}/pig") }},
-		//{path: "/123/{(?P<v1>hello[0-9]{1,3})}/pig", url: "/123/hello123/pig", params: map[string]string{"v1": "hello123"}, handler: func(ctx *Context) { fmt.Println("func:", "/123/{(?P<v1>hello[0-9]{1,3})}/pig") }},
+		//{path: "/12/", url: "/12/", handler: func(ctx *Context) { fmt.Println("func:", "douplicated: /12/") }},
+		{path: "/123/{hello[0-9]{1,3}}abc", url: "/123/hello123abc", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[0-9]{1,3}}abc") }},
+		{path: "/123/{hello[A-Z]{1,3}}", url: "/123/helloABC", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[A-Z]{1,3}}") }},
+		{path: "/123/{(?P<v1>hello[0-9]{1,3})}", url: "/123/hello123", params: map[string]string{"v1": "hello123"}, handler: func(ctx *Context) { fmt.Println("func:", "/123/{(?P<v1>hello[0-9]{1,3})}") }},
+		{path: "/123/{hello[0-9]{1,3}}/pig", url: "/123/hello123/pig", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[0-9]{1,3}}/pig") }},
+		{path: "/123/{(?P<v1>hello[0-9]{1,3})}/pig", url: "/123/hello123/pig", params: map[string]string{"v1": "hello123"}, handler: func(ctx *Context) { fmt.Println("func:", "/123/{(?P<v1>hello[0-9]{1,3})}/pig") }},
+		{path: "/123/{(?P<v1>hello[0-9]{1,3})-(?P<v2>world[0-9]{1,3})}/pig", url: "/123/hello123-world789/pig", params: map[string]string{"v1": "hello123", "v2": "world789"}, handler: func(ctx *Context) { fmt.Println("func:", "/123/{(?P<v1>hello[0-9]{1,3})}-(?P<v2>world[0-9]{1,3})/pig") }},
 	}
 	r := newRadix()
 	for _, tc := range tcs {

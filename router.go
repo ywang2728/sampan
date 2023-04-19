@@ -331,11 +331,15 @@ func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *nod
 			t = r.putRec(nil, n.part[:idx+1], nil)
 			n.part = n.part[idx+1:]
 			t.children[parseKey(n.part)] = n
-			if idx == lp-1 {
-				t.handler = handler
-			}
 		} else {
 			t = n
+		}
+		if idx == lp-1 {
+			if t.handler == nil {
+				t.handler = handler
+			} else {
+				log.Fatalf("Input path error, #%v", errors.New(`duplicated path:`+path))
+			}
 		}
 		if i < lp || (i == lp && idx != i-1) {
 			var tail *node
@@ -391,7 +395,7 @@ func (r *radix) getRec(n *node, path string, params map[string]string) (t *node)
 						if p, isMatched = strings.CutPrefix(p, toBeMatched); isMatched {
 							before.WriteString(toBeMatched)
 							if names := ptn.compiled.SubexpNames(); len(names) > 1 {
-								for i, match := range ptn.compiled.FindStringSubmatch(p) {
+								for i, match := range ptn.compiled.FindStringSubmatch(toBeMatched) {
 									if len(names[i]) != 0 {
 										params[names[i]] = match
 									}
@@ -533,7 +537,7 @@ func newDefaultGroup(r *router, middlewares []func(*Context), children map[strin
 }
 func (rg *RouterGroup) RouterGroup(prefix string, middlewares []func(*Context), children map[string]*RouterGroup) (g *RouterGroup) {
 	if _, ok := rg.children[prefix]; ok {
-		log.Fatalf("RouterGroup creating error, #%v", errors.New(`duplicated group prefix:`+prefix))
+		log.Fatalf("Create RouterGroup error, #%v", errors.New(`duplicated group prefix:`+prefix))
 	} else {
 		g = &RouterGroup{prefix: prefix, router: rg.router, middlewares: middlewares, children: children}
 		rg.children[prefix] = g
