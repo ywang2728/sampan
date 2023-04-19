@@ -173,7 +173,7 @@ func TestLruDelete(t *testing.T) {
 	}
 }
 
-func TestParsePref(t *testing.T) {
+func TestParsePrefix(t *testing.T) {
 	tcs := []struct {
 		path string
 		idx  int
@@ -213,6 +213,34 @@ func TestParsePref(t *testing.T) {
 		idx, eof := parsePrefix(tc.path)
 		assert.Equal(t, tc.idx, idx)
 		assert.Equal(t, tc.eof, eof)
+	}
+}
+
+func TestParseCommonPrefix(t *testing.T) {
+	tcs := []struct {
+		part string
+		path string
+		idx  int
+		i    int
+		ln   int
+		lp   int
+		eof  bool
+	}{
+		{part: "/", path: "/toto", idx: 0, i: 1, ln: 1, lp: 5, eof: true},
+		{part: "/toto", path: "/toto/", idx: 0, i: 5, ln: 5, lp: 6, eof: true},
+		{part: "/toto", path: "/t123/", idx: 0, i: 2, ln: 5, lp: 6, eof: false},
+		{part: "/123{abc}", path: "/123{abc}", idx: 0, i: 9, ln: 9, lp: 9, eof: true},
+		{part: "/1/2/3", path: "/1/2/3/", idx: 4, i: 6, ln: 6, lp: 7, eof: true},
+		{part: "/1/2/3/", path: "/1/2/3/", idx: 6, i: 7, ln: 7, lp: 7, eof: true},
+		{part: "/1/a/3/", path: "/1/b/3/", idx: 2, i: 3, ln: 7, lp: 7, eof: false},
+	}
+	for _, tc := range tcs {
+		idx, i, ln, lp := parseCommonPrefix(tc.part, tc.path)
+		assert.Equal(t, tc.idx, idx)
+		assert.Equal(t, tc.i, i)
+		assert.Equal(t, tc.ln, ln)
+		assert.Equal(t, tc.lp, lp)
+		//assert.Equal(t, tc.eof, eof)
 	}
 }
 
@@ -508,10 +536,12 @@ func TestGetRecPlainTextPath(t *testing.T) {
 		nodes   []map[string]string
 	}{
 		{path: "/123/", url: "/123/", handler: func(ctx *Context) { fmt.Println("func:", "/123/") }},
-		//{path: "/abc/def", url: "/abc/def", handler: func(ctx *Context) { fmt.Println("func:", "/abc/def") }},
-		//{path: "/123/haha/", url: "/123/haha/", handler: func(ctx *Context) { fmt.Println("func:", "/123/haha/") }},
-		{path: "/123/haha", url: "/123/haha", handler: func(ctx *Context) { fmt.Println("func:", "/123/haha") }},
+		{path: "/abc/def", url: "/abc/def", handler: func(ctx *Context) { fmt.Println("func:", "/abc/def") }},
 		{path: "/123/haha/nini", url: "/123/haha/nini", handler: func(ctx *Context) { fmt.Println("func:", "/123/haha/nini") }},
+		{path: "/123", url: "/123", handler: func(ctx *Context) { fmt.Println("func:", "/123") }},
+		{path: "/12/haha/nini", url: "/12/haha/nini", handler: func(ctx *Context) { fmt.Println("func:", "/12/haha/nini") }},
+		{path: "/12/haha/nini/", url: "/12/haha/nini/", handler: func(ctx *Context) { fmt.Println("func:", "/12/haha/nini/") }},
+		{path: "/12/", url: "/12/", handler: func(ctx *Context) { fmt.Println("func:", "/12/") }},
 		//{path: "/123/{hello[0-9]{1,3}}", url: "/123/hello123", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[0-9]{1,3}}") }},
 		//{path: "/123/{hello[0-9]{1,3}}abc", url: "/123/hello123abc", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[0-9]{1,3}}abc") }},
 		//{path: "/123/{hello[A-Z]{1,3}}", url: "/123/helloABC", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[A-Z]{1,3}}") }},
@@ -537,6 +567,7 @@ func TestGetRecPlainTextPath(t *testing.T) {
 		n := r.getRec(r.root, tc.url, params)
 		if n != nil {
 			cnt = append(cnt, n)
+			fmt.Println(tc.url)
 			n.handler(nil)
 			if tc.params != nil {
 				fmt.Printf("%+v\n", params)

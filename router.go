@@ -197,6 +197,23 @@ func parsePrefix(path string) (idx int, eof bool) {
 	return
 }
 
+func parseCommonPrefix(part, path string) (idx, i, ln, lp int) {
+	ln, lp = len(part), len(path)
+	min := ln
+	if min > lp {
+		min = lp
+	}
+	for idx = -1; i < min; i++ {
+		if part[i] != path[i] {
+			break
+		}
+		if part[i] == '/' {
+			idx = i
+		}
+	}
+	return
+}
+
 // Parse first segment of tail path as key.
 func parseKey(path string) (key string) {
 	i := 0
@@ -308,33 +325,19 @@ func (r *radix) putRec(n *node, path string, handler func(ctx *Context)) (t *nod
 			}
 		}
 	} else {
-		ln, lp := len(n.part), len(path)
-		min := ln
-		if min > lp {
-			min = lp
-		}
-		i, idx := 0, -1
-		for i < min {
-			if n.part[i] != path[i] {
-				break
-			}
-			if n.part[i] == '/' {
-				idx = i
-			}
-			i++
-		}
-		if i < ln {
+		idx, i, ln, lp := parseCommonPrefix(n.part, path)
+		if i < ln || (i == ln && idx != i-1) {
 			//there is tail of node path indeed, create new node for both common prefix
 			t = r.putRec(nil, n.part[:idx+1], nil)
 			n.part = n.part[idx+1:]
 			t.children[parseKey(n.part)] = n
-			if i == lp {
+			if idx == lp-1 {
 				t.handler = handler
 			}
 		} else {
 			t = n
 		}
-		if i < lp {
+		if i < lp || (i == lp && idx != i-1) {
 			var tail *node
 			//there is tail of path indeed, create new node for tail of new path
 			tailPath := path[idx+1:]
