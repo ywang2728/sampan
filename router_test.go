@@ -470,7 +470,6 @@ func TestRadixPutRecPlainTextPaths(t *testing.T) {
 		path    string
 		part    string
 		handler func(ctx *Context)
-		nodes   []map[string]string
 	}{
 		{path: "/123/", part: "/123/", handler: func(ctx *Context) {}},
 		{path: "/", part: "/", handler: func(ctx *Context) {}},
@@ -503,7 +502,6 @@ func TestRadixPutRecMixedPaths(t *testing.T) {
 		path    string
 		part    string
 		handler func(ctx *Context)
-		nodes   []map[string]string
 	}{
 		{path: "/{abc}/", part: "/{abc}/", handler: func(ctx *Context) {}},
 		{path: "/{abc}/123", part: "{def}", handler: func(ctx *Context) {}},
@@ -533,7 +531,6 @@ func TestGetRec(t *testing.T) {
 		url     string
 		params  map[string]string
 		handler func(ctx *Context)
-		nodes   []map[string]string
 	}{
 		{path: "/123/", url: "/123/", handler: func(ctx *Context) { fmt.Println("func:", "/123/") }},
 		{path: "/abc/def", url: "/abc/def", handler: func(ctx *Context) { fmt.Println("func:", "/abc/def") }},
@@ -589,7 +586,6 @@ func TestDeleteRec(t *testing.T) {
 	tcs := []struct {
 		path    string
 		handler func(ctx *Context)
-		nodes   []map[string]string
 	}{
 		{path: "/123/", handler: func(ctx *Context) { fmt.Println("func:", "/123/") }},
 		{path: "/abc/def", handler: func(ctx *Context) { fmt.Println("func:", "/abc/def") }},
@@ -639,6 +635,67 @@ func TestDeleteRec(t *testing.T) {
 		}
 	}
 
+}
+
+func TestUpdateRec(t *testing.T) {
+	tcs := []struct {
+		path           string
+		url            string
+		handler        func(ctx *Context)
+		updatedHandler func(ctx *Context)
+		params         map[string]string
+	}{
+		{path: "/123/", url: "/123/", handler: func(ctx *Context) { fmt.Println("func:", "/123/") }, updatedHandler: func(ctx *Context) { fmt.Println("updated:", "/123/") }},
+		{path: "/abc/def", url: "/abc/def", handler: func(ctx *Context) { fmt.Println("func:", "/abc/def") }, updatedHandler: func(ctx *Context) { fmt.Println("updated:", "/abc/def") }},
+		{path: "/123/haha/nini", url: "/123/haha/nini", handler: func(ctx *Context) { fmt.Println("func:", "/123/haha/nini") }, updatedHandler: func(ctx *Context) { fmt.Println("updated:", "/123/haha/nini") }},
+		{path: "/123", url: "/123", handler: func(ctx *Context) { fmt.Println("func:", "/123") }, updatedHandler: func(ctx *Context) { fmt.Println("updated:", "/123") }},
+		{path: "/12/haha/nini", url: "/12/haha/nini", handler: func(ctx *Context) { fmt.Println("func:", "/12/haha/nini") }, updatedHandler: func(ctx *Context) { fmt.Println("updated:", "/12/haha/nini") }},
+		{path: "/12/haha/nini/", url: "/12/haha/nini/", handler: func(ctx *Context) { fmt.Println("func:", "/12/haha/nini/") }, updatedHandler: func(ctx *Context) { fmt.Println("updated:", "/12/haha/nini/") }},
+		{path: "/12", url: "/12", handler: func(ctx *Context) { fmt.Println("func:", "/12/") }, updatedHandler: func(ctx *Context) { fmt.Println("updated:", "/12/") }},
+		{path: "/12/{hello[0-9]{1,3}}", url: "/12/hello123", handler: func(ctx *Context) { fmt.Println("func:", "/12/{hello[0-9]{1,3}}") }, updatedHandler: func(ctx *Context) { fmt.Println("updated:", "/12/{hello[0-9]{1,3}}") }},
+		{path: "/12/", url: "/12/", handler: func(ctx *Context) { fmt.Println("func:", "/12/") }, updatedHandler: func(ctx *Context) { fmt.Println("updated:", "/12/") }},
+		{path: "/123/{hello[0-9]{1,3}}abc", url: "/123/hello123abc", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[0-9]{1,3}}abc") }, updatedHandler: func(ctx *Context) { fmt.Println("updated:", "/123/{hello[0-9]{1,3}}abc") }},
+		{path: "/123/{hello[A-Z]{1,3}}", url: "/123/helloABC", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[A-Z]{1,3}}") }, updatedHandler: func(ctx *Context) { fmt.Println("updated:", "/123/{hello[A-Z]{1,3}}") }},
+		{path: "/123/{(?P<v1>hello[0-9]{1,3})}", url: "/123/hello123", params: map[string]string{"v1": "hello123"}, handler: func(ctx *Context) { fmt.Println("func:", "/123/{(?P<v1>hello[0-9]{1,3})}") }, updatedHandler: func(ctx *Context) { fmt.Println("updated:", "/123/{(?P<v1>hello[0-9]{1,3})}") }},
+		{path: "/123/{hello[0-9]{1,3}}/pig", url: "/123/hello123/pig", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[0-9]{1,3}}/pig") }, updatedHandler: func(ctx *Context) { fmt.Println("updated:", "/123/{hello[0-9]{1,3}}/pig") }},
+		{path: "/123/{(?P<v1>hello[0-9]{1,3})}/pig", url: "/123/hello123/pig", params: map[string]string{"v1": "hello123"}, handler: func(ctx *Context) { fmt.Println("func:", "/123/{(?P<v1>hello[0-9]{1,3})}/pig") }, updatedHandler: func(ctx *Context) { fmt.Println("updated:", "/123/{(?P<v1>hello[0-9]{1,3})}/pig") }},
+		{path: "/123/{(?P<v1>hello[0-9]{1,3})-(?P<v2>world[0-9]{1,3})}/pig", url: "/123/hello123-world789/pig", params: map[string]string{"v1": "hello123", "v2": "world789"}, handler: func(ctx *Context) { fmt.Println("func:", "/123/{(?P<v1>hello[0-9]{1,3})}-(?P<v2>world[0-9]{1,3})/pig") }, updatedHandler: func(ctx *Context) {
+			fmt.Println("updated:", "/123/{(?P<v1>hello[0-9]{1,3})}-(?P<v2>world[0-9]{1,3})/pig")
+		}},
+	}
+	r := newRadix()
+	for _, tc := range tcs {
+		var n *node
+		if n = r.putRec(r.root, tc.path, tc.handler); n != nil {
+			r.root = n
+			r.size++
+		}
+		assert.NotNil(t, n)
+	}
+	assert.NotNil(t, r)
+	assert.Equal(t, len(tcs), r.len())
+	fmt.Println(r)
+	var cnt []*node
+	for _, tc := range tcs {
+		if b := r.updateRec(r.root, tc.path, tc.updatedHandler); b {
+			params := make(map[string]string)
+			n := r.getRec(r.root, tc.url, params)
+			if n != nil {
+				cnt = append(cnt, n)
+				fmt.Println(tc.url)
+				n.handler(nil)
+				if tc.params != nil {
+					fmt.Printf("%+v\n", params)
+					for k, v := range tc.params {
+						assert.Equal(t, v, params[k])
+					}
+				}
+			} else {
+				fmt.Println("n is nil")
+			}
+		}
+	}
+	assert.Equal(t, len(tcs), len(cnt))
 }
 
 func TestNewRouter(t *testing.T) {

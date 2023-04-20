@@ -491,7 +491,7 @@ func (r *radix) deleteRec(n *node, path string) (b bool) {
 func (r *radix) delete(path string) (b bool) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	if r.deleteRec(r.root, path) {
+	if b = r.deleteRec(r.root, path); b {
 		if r.root.handler == nil && len(r.root.children) == 0 && len(r.root.reChildren) == 0 {
 			r.root = nil
 			r.size = 0
@@ -504,9 +504,34 @@ func (r *radix) delete(path string) (b bool) {
 				r.cache.delete(path)
 			}
 		}
-		b = true
 	}
 	return
+}
+
+func (r *radix) updateRec(n *node, path string, handler func(*Context)) (b bool) {
+	if after, ok := strings.CutPrefix(path, n.part); ok {
+		if len(after) > 0 {
+			if child, ok := n.children[parseKey(after)]; ok {
+				b = r.updateRec(child, after, handler)
+			} else {
+				for _, reChild := range n.reChildren {
+					if b = r.updateRec(reChild, after, handler); b {
+						break
+					}
+				}
+			}
+		} else if n.handler != nil {
+			n.handler = handler
+			b = true
+		}
+	}
+	return
+}
+
+func (r *radix) update(path string, handler func(*Context)) (b bool) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	return r.updateRec(r.root, path, handler)
 }
 
 func newRouter() *router {
