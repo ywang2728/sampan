@@ -590,6 +590,17 @@ func (r *router) delete(method string, path string) (b bool) {
 	return
 }
 
+func (r *router) update(method string, path string, handler func(*Context)) (b bool) {
+	log.Printf("Update route %4s - %s", method, path)
+	if path[0] != '/' {
+		panic("Path must begin with '/'!")
+	}
+	if tree, ok := r.trees[method]; ok {
+		b = tree.update(path, handler)
+	}
+	return
+}
+
 func newDefaultGroup(r *router, middlewares []func(*Context), children map[string]*RouterGroup) *RouterGroup {
 	return &RouterGroup{prefix: "", router: r, middlewares: middlewares, children: children}
 }
