@@ -527,7 +527,7 @@ func TestRadixPutRecMixedPaths(t *testing.T) {
 	fmt.Println(r)
 }
 
-func TestGetRecPlainTextPath(t *testing.T) {
+func TestGetRec(t *testing.T) {
 	tcs := []struct {
 		path    string
 		url     string
@@ -544,7 +544,7 @@ func TestGetRecPlainTextPath(t *testing.T) {
 		{path: "/12", url: "/12", handler: func(ctx *Context) { fmt.Println("func:", "/12/") }},
 		{path: "/12/{hello[0-9]{1,3}}", url: "/12/hello123", handler: func(ctx *Context) { fmt.Println("func:", "/12/{hello[0-9]{1,3}}") }},
 		{path: "/12/", url: "/12/", handler: func(ctx *Context) { fmt.Println("func:", "/12/") }},
-		//{path: "/12/", url: "/12/", handler: func(ctx *Context) { fmt.Println("func:", "douplicated: /12/") }},
+		//{path: "/12/", url: "/12/", handler: func(ctx *Context) { fmt.Println("func:", "duplicated: /12/") }},
 		{path: "/123/{hello[0-9]{1,3}}abc", url: "/123/hello123abc", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[0-9]{1,3}}abc") }},
 		{path: "/123/{hello[A-Z]{1,3}}", url: "/123/helloABC", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[A-Z]{1,3}}") }},
 		{path: "/123/{(?P<v1>hello[0-9]{1,3})}", url: "/123/hello123", params: map[string]string{"v1": "hello123"}, handler: func(ctx *Context) { fmt.Println("func:", "/123/{(?P<v1>hello[0-9]{1,3})}") }},
@@ -583,6 +583,62 @@ func TestGetRecPlainTextPath(t *testing.T) {
 		}
 	}
 	assert.Equal(t, len(tcs), len(cnt))
+}
+
+func TestDeleteRec(t *testing.T) {
+	tcs := []struct {
+		path    string
+		handler func(ctx *Context)
+		nodes   []map[string]string
+	}{
+		{path: "/123/", handler: func(ctx *Context) { fmt.Println("func:", "/123/") }},
+		{path: "/abc/def", handler: func(ctx *Context) { fmt.Println("func:", "/abc/def") }},
+		{path: "/123/haha/nini", handler: func(ctx *Context) { fmt.Println("func:", "/123/haha/nini") }},
+		{path: "/123", handler: func(ctx *Context) { fmt.Println("func:", "/123") }},
+		{path: "/12/haha/nini", handler: func(ctx *Context) { fmt.Println("func:", "/12/haha/nini") }},
+		{path: "/12/haha/nini/", handler: func(ctx *Context) { fmt.Println("func:", "/12/haha/nini/") }},
+		{path: "/12", handler: func(ctx *Context) { fmt.Println("func:", "/12/") }},
+		{path: "/12/{hello[0-9]{1,3}}", handler: func(ctx *Context) { fmt.Println("func:", "/12/{hello[0-9]{1,3}}") }},
+		{path: "/12/", handler: func(ctx *Context) { fmt.Println("func:", "/12/") }},
+		{path: "/123/{hello[0-9]{1,3}}abc", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[0-9]{1,3}}abc") }},
+		{path: "/123/{hello[A-Z]{1,3}}", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[A-Z]{1,3}}") }},
+		{path: "/123/{(?P<v1>hello[0-9]{1,3})}", handler: func(ctx *Context) { fmt.Println("func:", "/123/{(?P<v1>hello[0-9]{1,3})}") }},
+		{path: "/123/{hello[0-9]{1,3}}/pig", handler: func(ctx *Context) { fmt.Println("func:", "/123/{hello[0-9]{1,3}}/pig") }},
+		{path: "/123/{(?P<v1>hello[0-9]{1,3})}/pig", handler: func(ctx *Context) { fmt.Println("func:", "/123/{(?P<v1>hello[0-9]{1,3})}/pig") }},
+		{path: "/123/{(?P<v1>hello[0-9]{1,3})-(?P<v2>world[0-9]{1,3})}/pig", handler: func(ctx *Context) { fmt.Println("func:", "/123/{(?P<v1>hello[0-9]{1,3})}-(?P<v2>world[0-9]{1,3})/pig") }},
+	}
+	r := newRadix()
+	for _, tc := range tcs {
+		var n *node
+		if n = r.putRec(r.root, tc.path, tc.handler); n != nil {
+			r.root = n
+			r.size++
+		}
+		assert.NotNil(t, n)
+	}
+	assert.NotNil(t, r)
+	assert.Equal(t, len(tcs), r.len())
+	fmt.Println(r)
+	for i, tc := range tcs {
+		fmt.Println("##### Deleting path: ", tc.path)
+		b := r.deleteRec(r.root, tc.path)
+		if b {
+			if r.root.handler == nil && len(r.root.children) == 0 && len(r.root.reChildren) == 0 {
+				r.root = nil
+				r.size = 0
+				r.cache.clear()
+			} else {
+				r.size--
+			}
+
+		}
+		assert.True(t, b)
+		if r.root != nil {
+			fmt.Println(r)
+			assert.Equal(t, len(tcs)-i-1, r.size)
+		}
+	}
+
 }
 
 func TestNewRouter(t *testing.T) {

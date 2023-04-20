@@ -449,9 +449,42 @@ func (r *radix) get(path string) (func(*Context), map[string]string) {
 }
 
 // Delete leaf node, then recursively delete parent node if it's alone
-func (r *radix) deleteRec(n *node, p string) (b bool) {
-	fmt.Println(n, p)
-	return true
+func (r *radix) deleteRec(n *node, path string) (b bool) {
+	if after, ok := strings.CutPrefix(path, n.part); ok {
+		if len(after) > 0 {
+			key := parseKey(after)
+			if child, ok := n.children[key]; ok {
+				if r.deleteRec(child, after) {
+					if child.handler == nil && len(child.children) == 0 && len(child.reChildren) == 0 {
+						delete(n.children, key)
+					}
+					b = true
+				}
+			} else {
+				l := len(n.reChildren)
+				for idx, reChild := range n.reChildren {
+					if b = r.deleteRec(reChild, after); b {
+						if reChild.handler == nil && len(reChild.children) == 0 && len(reChild.reChildren) == 0 {
+							if l == 1 {
+								n.reChildren = make([]*node, 0)
+							} else if idx == 0 {
+								n.reChildren = n.reChildren[1:]
+							} else if idx == l-1 {
+								n.reChildren = n.reChildren[:idx]
+							} else {
+								n.reChildren = append(n.reChildren[:idx], n.reChildren[idx+1:]...)
+							}
+						}
+						break
+					}
+				}
+			}
+		} else {
+			n.handler = nil
+			b = true
+		}
+	}
+	return
 }
 
 // Delete root node if children lists are empty.
@@ -459,7 +492,7 @@ func (r *radix) delete(path string) (b bool) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	if r.deleteRec(r.root, path) {
-		if len(r.root.children) == 0 && len(r.root.reChildren) == 0 {
+		if r.root.handler == nil && len(r.root.children) == 0 && len(r.root.reChildren) == 0 {
 			r.root = nil
 			r.size = 0
 			r.cache.clear()
