@@ -3,8 +3,9 @@ package sampan
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"net/http"
+	"net/url"
 	"regexp"
-	"strings"
 	"testing"
 )
 
@@ -525,7 +526,7 @@ func TestRadixPutRecMixedPaths(t *testing.T) {
 	fmt.Println(r)
 }
 
-func TestGetRec(t *testing.T) {
+func TestRadixGetRec(t *testing.T) {
 	tcs := []struct {
 		path    string
 		url     string
@@ -582,7 +583,7 @@ func TestGetRec(t *testing.T) {
 	assert.Equal(t, len(tcs), len(cnt))
 }
 
-func TestDeleteRec(t *testing.T) {
+func TestRadixDeleteRec(t *testing.T) {
 	tcs := []struct {
 		path    string
 		handler func(ctx *Context)
@@ -637,7 +638,7 @@ func TestDeleteRec(t *testing.T) {
 
 }
 
-func TestUpdateRec(t *testing.T) {
+func TestRadixUpdateRec(t *testing.T) {
 	tcs := []struct {
 		path           string
 		url            string
@@ -702,5 +703,178 @@ func TestNewRouter(t *testing.T) {
 	r := newRouter()
 	assert.NotNil(t, r)
 	assert.NotNil(t, r.trees)
-	fmt.Println(strings.CutPrefix("", "abc"))
+}
+
+func TestRouterPutAndLen(t *testing.T) {
+	tcs := []struct {
+		method  string
+		path    string
+		handler func(ctx *Context)
+	}{
+		{method: http.MethodGet, path: "/123/", handler: func(ctx *Context) { fmt.Println("func:", "/123/") }},
+		{method: http.MethodPost, path: "/abc/def", handler: func(ctx *Context) { fmt.Println("func:", "/abc/def") }},
+		{method: http.MethodPut, path: "/123/haha/nini", handler: func(ctx *Context) { fmt.Println("func:", "/123/haha/nini") }},
+		{method: http.MethodDelete, path: "/123", handler: func(ctx *Context) { fmt.Println("func:", "/123") }},
+		{method: http.MethodPut, path: "/12/haha/nini", handler: func(ctx *Context) { fmt.Println("func:", "/12/haha/nini") }},
+		{method: http.MethodPost, path: "/12/haha/nini/", handler: func(ctx *Context) { fmt.Println("func:", "/12/haha/nini/") }},
+		{method: http.MethodGet, path: "/12", handler: func(ctx *Context) { fmt.Println("func:", "/12/") }},
+		{method: http.MethodGet, path: "/12/{hello[0-9]{1,3}}", handler: func(ctx *Context) { fmt.Println("func:", "/12/{hello[0-9]{1,3}}") }},
+		{method: http.MethodPatch, path: "/12/", handler: func(ctx *Context) { fmt.Println("func:", "/12/") }},
+	}
+	router := newRouter()
+	for _, tc := range tcs {
+		router.put(tc.method, tc.path, tc.handler)
+	}
+	assert.Equal(t, router.len(), len(tcs))
+}
+
+func TestRouterClearAndLen(t *testing.T) {
+	tcs := []struct {
+		method  string
+		path    string
+		handler func(ctx *Context)
+	}{
+		{method: http.MethodGet, path: "/123/", handler: func(ctx *Context) { fmt.Println("func:", "/123/") }},
+		{method: http.MethodPost, path: "/abc/def", handler: func(ctx *Context) { fmt.Println("func:", "/abc/def") }},
+		{method: http.MethodPut, path: "/123/haha/nini", handler: func(ctx *Context) { fmt.Println("func:", "/123/haha/nini") }},
+		{method: http.MethodDelete, path: "/123", handler: func(ctx *Context) { fmt.Println("func:", "/123") }},
+	}
+	router := newRouter()
+	for _, tc := range tcs {
+		router.put(tc.method, tc.path, tc.handler)
+	}
+	assert.Equal(t, len(tcs), router.len())
+	router.clear()
+	assert.Equal(t, 0, router.len())
+}
+
+func TestNewRouterGroup(t *testing.T) {
+	rg := NewRouterGroup("", newRouter())
+	assert.NotNil(t, rg)
+}
+
+func TestRouterGroupNewGroupAndDeleteGroup(t *testing.T) {
+	prefixChain := []string{"/abc/", "123/", "def"}
+	rg := NewRouterGroup("", newRouter())
+	assert.NotNil(t, rg)
+	g1 := rg.Group(prefixChain[0])
+	g1.Group(prefixChain[1])
+	g1.Group(prefixChain[2])
+	assert.Equal(t, 3, rg.len())
+	g1.Group(prefixChain[1])
+	assert.Equal(t, 2, rg.len())
+}
+
+func TestRouterGroupGetPrefix(t *testing.T) {
+	prefixChain := []string{"/abc/", "123/", "def"}
+	rg := NewRouterGroup("", newRouter())
+	assert.NotNil(t, rg)
+	g := rg.Group(prefixChain[0]).Group(prefixChain[1]).Group(prefixChain[2])
+	assert.Equal(t, 3, rg.len())
+	assert.Equal(t, "/abc/123/def", g.getPrefix())
+	rg = NewRouterGroup("", newRouter())
+	g1 := rg.Group(prefixChain[0])
+	g2 := g1.Group(prefixChain[1])
+	g3 := g1.Group(prefixChain[2])
+	assert.Equal(t, 3, rg.len())
+	assert.Equal(t, prefixChain[0], g1.getPrefix())
+	assert.Equal(t, prefixChain[0]+prefixChain[1], g2.getPrefix())
+	assert.Equal(t, prefixChain[0]+prefixChain[2], g3.getPrefix())
+}
+
+func TestRouterGroupPutPreMiddlewaresAndPostMiddlewares(t *testing.T) {
+	prefixChain := []string{"/abc/", "123/", "def"}
+	preMiddlewares := []func(ctx *Context){
+		func(ctx *Context) {
+			fmt.Println("preM_abc")
+		},
+		func(ctx *Context) {
+			fmt.Println("preM_123")
+		},
+		func(ctx *Context) {
+			fmt.Println("preM_def")
+		},
+	}
+
+	postMiddlewares := []func(ctx *Context){
+		func(ctx *Context) {
+			fmt.Println("postM_abc")
+		},
+		func(ctx *Context) {
+			fmt.Println("postM_123")
+		},
+		func(ctx *Context) {
+			fmt.Println("postM_def")
+		},
+	}
+	rg := NewRouterGroup("", newRouter())
+	assert.NotNil(t, rg)
+	g1 := rg.Group(prefixChain[0]).PreMiddlewares(preMiddlewares[0]).PostMiddlewares(postMiddlewares[0])
+	g2 := g1.Group(prefixChain[1]).PreMiddlewares(preMiddlewares[1]).PostMiddlewares(postMiddlewares[1])
+	g3 := g1.Group(prefixChain[2]).PreMiddlewares(preMiddlewares[2]).PostMiddlewares(postMiddlewares[2])
+	assert.Equal(t, 3, rg.len())
+	assert.Equal(t, 1, len(g1.preMiddlewares))
+	assert.Equal(t, 1, len(g1.postMiddlewares))
+	assert.Equal(t, 1, len(g2.preMiddlewares))
+	assert.Equal(t, 1, len(g2.postMiddlewares))
+	assert.Equal(t, 1, len(g3.preMiddlewares))
+	assert.Equal(t, 1, len(g3.postMiddlewares))
+}
+
+func TestRouterGroupPutAndGetPreMiddlewares(t *testing.T) {
+	prefixChain := []string{"/abc/", "123/", "def"}
+	preMiddlewares := []func(ctx *Context){
+		func(ctx *Context) {
+			ctx.Path = ctx.Path + "abc"
+		},
+		func(ctx *Context) {
+			ctx.Path = ctx.Path + "123"
+		},
+		func(ctx *Context) {
+			ctx.Path = ctx.Path + "def"
+		},
+	}
+	rg := NewRouterGroup("", newRouter())
+	assert.NotNil(t, rg)
+	g1 := rg.Group(prefixChain[0]).PreMiddlewares(preMiddlewares[0])
+	g2 := g1.Group(prefixChain[1]).PreMiddlewares(preMiddlewares[1])
+	g3 := g2.Group(prefixChain[2]).PreMiddlewares(preMiddlewares[2])
+	assert.Equal(t, 3, rg.len())
+	assert.Equal(t, 1, len(g1.preMiddlewares))
+	assert.Equal(t, 1, len(g2.preMiddlewares))
+	assert.Equal(t, 1, len(g3.preMiddlewares))
+	ctx := newContext(nil, &http.Request{Method: http.MethodPut, URL: &url.URL{Path: ""}})
+	for _, f := range g3.getPreMiddlewares() {
+		f(ctx)
+	}
+	assert.Equal(t, ctx.Path, "abc123def")
+}
+
+func TestRouterGroupPutAndGetPostMiddlewares(t *testing.T) {
+	prefixChain := []string{"/abc/", "123/", "def"}
+	postMiddlewares := []func(ctx *Context){
+		func(ctx *Context) {
+			ctx.Path = ctx.Path + "abc"
+		},
+		func(ctx *Context) {
+			ctx.Path = ctx.Path + "123"
+		},
+		func(ctx *Context) {
+			ctx.Path = ctx.Path + "def"
+		},
+	}
+	rg := NewRouterGroup("", newRouter())
+	assert.NotNil(t, rg)
+	g1 := rg.Group(prefixChain[0]).PostMiddlewares(postMiddlewares[0])
+	g2 := g1.Group(prefixChain[1]).PostMiddlewares(postMiddlewares[1])
+	g3 := g2.Group(prefixChain[2]).PostMiddlewares(postMiddlewares[2])
+	assert.Equal(t, 3, rg.len())
+	assert.Equal(t, 1, len(g1.postMiddlewares))
+	assert.Equal(t, 1, len(g2.postMiddlewares))
+	assert.Equal(t, 1, len(g3.postMiddlewares))
+	ctx := newContext(nil, &http.Request{Method: http.MethodPut, URL: &url.URL{Path: ""}})
+	for _, f := range g3.getPostMiddlewares() {
+		f(ctx)
+	}
+	assert.Equal(t, ctx.Path, "def123abc")
 }
