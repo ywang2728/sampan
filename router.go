@@ -749,3 +749,7 @@ func (rg *RouterGroup) PutStaticRoute(relativePath string, dir string) {
 	}
 	rg.router.put(http.MethodGet, path.Join(relativePath, "/{(?P<filepath>.+)}"), handler)
 }
+
+func (rg *RouterGroup) DeleteStaticRoute(relativePath string) {
+	rg.router.delete(http.MethodGet, path.Join(rg.getPrefix(), relativePath))
+}
