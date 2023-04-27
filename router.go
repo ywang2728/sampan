@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path"
 	"regexp"
 	"strings"
 	"sync"
@@ -679,6 +680,34 @@ func (rg *RouterGroup) PutRoute(method string, path string, handler func(*Contex
 	rg.router.put(method, rg.getPrefix()+path, handler)
 }
 
+func (rg *RouterGroup) GET(path string, handler func(*Context)) {
+	rg.PutRoute(http.MethodGet, path, handler)
+}
+
+func (rg *RouterGroup) POST(path string, handler func(*Context)) {
+	rg.PutRoute(http.MethodPost, path, handler)
+}
+
+func (rg *RouterGroup) PUT(path string, handler func(*Context)) {
+	rg.PutRoute(http.MethodPut, path, handler)
+}
+
+func (rg *RouterGroup) PATCH(path string, handler func(*Context)) {
+	rg.PutRoute(http.MethodPatch, path, handler)
+}
+
+func (rg *RouterGroup) DELETE(path string, handler func(*Context)) {
+	rg.PutRoute(http.MethodDelete, path, handler)
+}
+
+func (rg *RouterGroup) HEAD(path string, handler func(*Context)) {
+	rg.PutRoute(http.MethodHead, path, handler)
+}
+
+func (rg *RouterGroup) OPTIONS(path string, handler func(*Context)) {
+	rg.PutRoute(http.MethodOptions, path, handler)
+}
+
 func (rg *RouterGroup) GetRoute(method string, path string) (handlerChain []func(*Context), params map[string]string) {
 	var handler func(*Context)
 	g := rg
@@ -707,30 +736,16 @@ func (rg *RouterGroup) DeleteRoute(method string, path string) {
 	rg.router.delete(method, rg.getPrefix()+path)
 }
 
-func (rg *RouterGroup) GET(path string, handler func(*Context)) {
-	rg.PutRoute(http.MethodGet, path, handler)
-}
+func (rg *RouterGroup) PutStaticRoute(relativePath string, dir string) {
+	fss := http.Dir(dir)
+	fs := http.StripPrefix(path.Join(rg.getPrefix(), relativePath), http.FileServer(fss))
+	handler := func(ctx *Context) {
+		if _, err := fss.Open(ctx.params["filepath"]); err != nil {
+			ctx.Status(http.StatusNotFound)
+			return
+		}
 
-func (rg *RouterGroup) POST(path string, handler func(*Context)) {
-	rg.PutRoute(http.MethodPost, path, handler)
-}
-
-func (rg *RouterGroup) PUT(path string, handler func(*Context)) {
-	rg.PutRoute(http.MethodPut, path, handler)
-}
-
-func (rg *RouterGroup) PATCH(path string, handler func(*Context)) {
-	rg.PutRoute(http.MethodPatch, path, handler)
-}
-
-func (rg *RouterGroup) DELETE(path string, handler func(*Context)) {
-	rg.PutRoute(http.MethodDelete, path, handler)
-}
-
-func (rg *RouterGroup) HEAD(path string, handler func(*Context)) {
-	rg.PutRoute(http.MethodHead, path, handler)
-}
-
-func (rg *RouterGroup) OPTIONS(path string, handler func(*Context)) {
-	rg.PutRoute(http.MethodOptions, path, handler)
+		fs.ServeHTTP(ctx.Writer, ctx.Req)
+	}
+	rg.router.put(http.MethodGet, path.Join(relativePath, "/{(?P<filepath>.+)}"), handler)
 }
