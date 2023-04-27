@@ -761,8 +761,6 @@ func TestRouterGroupNewGroupAndDeleteGroup(t *testing.T) {
 	g1.Group(prefixChain[1])
 	g1.Group(prefixChain[2])
 	assert.Equal(t, 3, rg.len())
-	//g1.Group(prefixChain[1])
-	//assert.Equal(t, 2, rg.len())
 }
 
 func TestRouterGroupGetPrefix(t *testing.T) {
