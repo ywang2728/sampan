@@ -1,2 +1,2 @@
-# sampan
+# Sampan
 web framework

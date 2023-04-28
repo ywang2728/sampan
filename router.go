@@ -738,7 +738,8 @@ func (rg *RouterGroup) DeleteRoute(method string, path string) {
 
 func (rg *RouterGroup) PutStaticRoute(relativePath string, dir string) {
 	fss := http.Dir(dir)
-	fs := http.StripPrefix(path.Join(rg.getPrefix(), relativePath), http.FileServer(fss))
+	absolutePath := path.Join(rg.getPrefix(), relativePath)
+	fs := http.StripPrefix(absolutePath, http.FileServer(fss))
 	handler := func(ctx *Context) {
 		if _, err := fss.Open(ctx.params["filepath"]); err != nil {
 			ctx.Status(http.StatusNotFound)
@@ -747,7 +748,7 @@ func (rg *RouterGroup) PutStaticRoute(relativePath string, dir string) {
 
 		fs.ServeHTTP(ctx.Writer, ctx.Req)
 	}
-	rg.router.put(http.MethodGet, path.Join(relativePath, "/{(?P<filepath>.+)}"), handler)
+	rg.router.put(http.MethodGet, path.Join(absolutePath, "/{(?P<filepath>.+)}"), handler)
 }
 
 func (rg *RouterGroup) DeleteStaticRoute(relativePath string) {

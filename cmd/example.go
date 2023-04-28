@@ -20,5 +20,6 @@ func main() {
 	g.GET("/haha", func(ctx *sampan.Context) {
 		ctx.HTML(http.StatusOK, "<h1>HAHAHA</h1>")
 	})
+	g.PutStaticRoute("/tmp", "/tmp")
 	s.Listen(":12345")
 }
