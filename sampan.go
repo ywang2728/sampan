@@ -1,7 +1,11 @@
 package sampan
 
 import (
+	"fmt"
+	"log"
 	"net/http"
+	"runtime"
+	"strings"
 )
 
 type Sampan struct {
@@ -68,6 +72,22 @@ func (s *Sampan) OPTIONS(path string, handler func(*Context)) {
 
 func (s *Sampan) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	c := newContext(w, req)
+
+	defer func() {
+		if err := recover(); err != nil {
+			msg := strings.Builder{}
+			msg.WriteString(fmt.Sprintf("%s\n%s", err, "\nTraceback:"))
+			var pcs [32]uintptr
+			for _, pc := range pcs[:runtime.Callers(3, pcs[:])] {
+				fn := runtime.FuncForPC(pc)
+				file, line := fn.FileLine(pc)
+				msg.WriteString(fmt.Sprintf("\n\t%s:%d", file, line))
+			}
+			log.Printf("%s\n\n", msg.String())
+			c.String(http.StatusInternalServerError, "Internal Server Error")
+		}
+	}()
+
 	handlerChain, params := s.rg.GetRoute(c.Method, c.Path)
 	if len(handlerChain) > 0 {
 		c.setParams(params)
