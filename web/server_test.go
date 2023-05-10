@@ -1,4 +1,4 @@
-package sampan
+package web
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -8,5 +8,5 @@ import (
 func TestNew(t *testing.T) {
 	s := New()
 	assert.NotNil(t, s)
-	assert.NotNil(t, s.group)
+	assert.NotNil(t, s.rg)
 }

@@ -1,4 +1,4 @@
-package sampan
+package web
 
 import (
 	"encoding/json"
