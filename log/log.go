@@ -1,152 +1,157 @@
 package log
 
 import (
+	"fmt"
 	"github.com/google/uuid"
-	"strings"
-	"sync"
 	"time"
 )
 
 const (
-	OFF Level = iota
-	FATAL
-	ERROR
-	WARN
-	INFO
-	DEBUG
-	TRACE
+	MsgChanCap = 1024
 )
 
 type (
-	Level int
-
-	Writer interface {
-		write(string)
-	}
-
-	Formatter interface {
-		format(*Entry) string
-	}
-
 	Logger interface {
-		Trace(*Entry)
-		Debug(*Entry)
-		Info(*Entry)
-		Warn(*Entry)
-		Error(*Entry)
-		Fatal(*Entry)
-		SetFormatter(*Formatter)
-		AddWriters(...*Writer)
+		Fatal(string)
+		Fatalf(string, any)
+		Error(string)
+		Errorf(string, any)
+		Warn(string)
+		Warnf(string, any)
+		Info(string)
+		Infof(string, any)
+		Debug(string)
+		Debugf(string, any)
+		Trace(string)
+		Tracef(string, any)
 	}
 
 	Entry struct {
-		id    [16]byte
-		level Level
-		now   time.Time
-		msg   string
-		file  string
-		line  int
-		data  any
+		id     [16]byte
+		level  Level
+		now    time.Time
+		msg    string
+		source string
+		line   int
+		meta   map[string]any
 	}
 
 	Log struct {
-		mtx       sync.Mutex
-		wg        sync.WaitGroup
 		level     Level
 		prefix    string
-		msgBuff   []*Entry
 		msgChan   chan *Entry
-		writers   []*Writer
-		formatter *Formatter
-	}
-
-	ConsoleWriter struct {
-		formatter *Formatter
-	}
-
-	FileWriter struct {
-		formatter *Formatter
-		path      string
-	}
-
-	CLFormatter struct {
-		template string
-	}
-
-	JsonFormatter struct {
-		inline bool
+		writers   []Writer
+		formatter Formatter
 	}
 )
 
-var _levels = [7]string{"OFF", "FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE"}
-
-func (l Level) String() string {
-	return _levels[l]
-}
-
-func (l Level) Index() int {
-	return int(l)
-}
-
-func parseLevel(l string) (level Level) {
-	switch strings.ToUpper(l) {
-	case "FATAL":
-		level = FATAL
-	case "ERROR":
-		level = ERROR
-	case "WARN":
-		level = WARN
-	case "INFO":
-		level = INFO
-	case "DEBUG":
-		level = DEBUG
-	case "TRACE":
-		level = TRACE
-	default:
-		level = OFF
-	}
+func newEntry(l Level, m string) (e *Entry) {
+	e = &Entry{id: uuid.New(), level: l, now: time.Now(), msg: m, meta: make(map[string]any)}
 	return
 }
 
-func newEntry(l, m string) (e *Entry) {
-	e = &Entry{id: uuid.New(), level: parseLevel(l), now: time.Now(), msg: m}
-	return
+func (e *Entry) withSource(source string) *Entry {
+	e.source = source
+	return e
 }
 
-var _log *Log
+func (e *Entry) withLine(line int) *Entry {
+	e.line = line
+	return e
+}
 
-func (l Log) SetLevel(level Level) {
+func (e *Entry) withMeta(k string, v any) *Entry {
+	e.meta[k] = v
+	return e
+}
+
+func New() (l *Log) {
+	l = &Log{msgChan: make(chan *Entry, MsgChanCap), writers: []Writer{}}
+	return l
+}
+
+func (l *Log) WithLevel(level Level) *Log {
 	l.level = level
+	return l
 }
 
-func (l Log) AddWriters(ws ...*Writer) {
+func (l *Log) WithPrefix(p string) *Log {
+	l.prefix = p
+	return l
+}
+
+func (l *Log) WithWriters(ws ...Writer) *Log {
 	l.writers = append(l.writers, ws...)
+	return l
 }
 
-func (l Log) SetFormatter(f *Formatter) {
+func (l *Log) WithFormatter(f Formatter) *Log {
 	l.formatter = f
+	return l
 }
 
-func (l Log) Trace(e *Entry) {
-
+func (l *Log) logging() {
+	go func() {
+		for e := range l.msgChan {
+			if l.level >= e.level {
+				for _, w := range l.writers {
+					var s string
+					if f, ok := w.GetFormatter(); ok {
+						s = f.Format(e)
+					} else {
+						s = l.formatter.Format(e)
+					}
+					w.Write(s)
+				}
+			}
+		}
+	}()
 }
 
-func SetLevel(level string) {
-	_log.SetLevel(parseLevel(level))
+func (l *Log) Fatal(s string) {
+	l.msgChan <- newEntry(FATAL, s)
 }
 
-func SetFormatter(f *Formatter) {
-	_log.SetFormatter(f)
+func (l *Log) Fatalf(s string, a any) {
+	l.msgChan <- newEntry(FATAL, fmt.Sprintf(s, a))
 }
 
-func AddWriters(ws ...*Writer) {
-	_log.AddWriters(ws...)
+func (l *Log) Error(s string) {
+	l.msgChan <- newEntry(ERROR, s)
 }
 
-func Trace(msg string) {
-	newEntry("trace", msg)
+func (l *Log) Errorf(s string, a any) {
+	l.msgChan <- newEntry(ERROR, fmt.Sprintf(s, a))
 }
 
-func init() {
-	_log = &Log{level: INFO}
+func (l *Log) Warn(s string) {
+	l.msgChan <- newEntry(WARN, s)
+}
+
+func (l *Log) Warnf(s string, a any) {
+	l.msgChan <- newEntry(WARN, fmt.Sprintf(s, a))
+}
+
+func (l *Log) Info(s string) {
+	l.msgChan <- newEntry(INFO, s)
+}
+
+func (l *Log) Infof(s string, a any) {
+	l.msgChan <- newEntry(INFO, fmt.Sprintf(s, a))
+}
+
+func (l *Log) Debug(s string) {
+	l.msgChan <- newEntry(DEBUG, s)
+}
+
+func (l *Log) Debugf(s string, a any) {
+	l.msgChan <- newEntry(DEBUG, fmt.Sprintf(s, a))
+}
+
+func (l *Log) Trace(s string) {
+	l.msgChan <- newEntry(TRACE, s)
+}
+
+func (l *Log) Tracef(s string, a any) {
+	l.msgChan <- newEntry(TRACE, fmt.Sprintf(s, a))
 }
