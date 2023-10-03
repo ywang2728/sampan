@@ -23,3 +23,7 @@ func main() {
 	println(info)
 	defer func() { fmt.Println("fin de main") }()
 }
+
+func toto[K comparable](a, b K) bool {
+	return a == b
+}
