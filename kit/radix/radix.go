@@ -9,36 +9,43 @@ import (
 )
 
 type (
-	Parser[K comparable] interface {
-		Compare(K, K) (K, K, K)
+	Key[K comparable] interface {
+		fmt.Stringer
+		Value() K
+		// Match the current key with input key, return common prefix, and tails of current key and input key.
+		Match(K) (KeyIterable[K], KeyIterable[K], KeyIterable[K], *map[K]K)
+	}
+
+	KeyIterable[K comparable] interface {
+		hasNext() bool
+		Next() Key[K]
 	}
 
 	node[K comparable, V any] struct {
-		key    K
-		value  V
-		nodes  []*node[K, V]
-		parser Parser[K]
+		k     Key[K]
+		v     *V
+		nodes []*node[K, V]
 	}
 
 	Radix[K comparable, V any] struct {
-		root      *node[K, V]
-		size      int
-		newParser func(K) (Parser[K], K, K)
-		mtx       sync.RWMutex
+		size int
+		root *node[K, V]
+		// Func to build Key Iterator, the Key struct could be String, Wildcard, or Regex.
+		buildKeyIter func(K) KeyIterable[K]
+		mtx          sync.RWMutex
 	}
 )
 
-func New[K comparable, V any](np func(K) (Parser[K], K, K)) *Radix[K, V] {
+func New[K comparable, V any](keyIterFunc func(K) KeyIterable[K]) *Radix[K, V] {
 	return &Radix[K, V]{
-		newParser: np,
+		buildKeyIter: keyIterFunc,
 	}
 }
 
-func (r *Radix[K, V]) newNode(k K, p Parser[K]) (n *node[K, V]) {
+func (r *Radix[K, V]) newNode(k Key[K]) (n *node[K, V]) {
 	n = &node[K, V]{
-		key:    k,
-		nodes:  []*node[K, V]{},
-		parser: p,
+		k:     k,
+		nodes: []*node[K, V]{},
 	}
 	return
 }
@@ -80,7 +87,7 @@ func (r *Radix[K, V]) String() string {
 func (r *Radix[K, V]) put(k K, v V) (b bool) {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
-	if nr := r.putRec(r.root, k, v); nr != nil {
+	if nr := r.putRec(r.root, r.buildKeyIter(k), &v); nr != nil {
 		r.root = nr
 		r.size++
 		b = true
@@ -88,43 +95,43 @@ func (r *Radix[K, V]) put(k K, v V) (b bool) {
 	return
 }
 
-func (r *Radix[K, V]) putRec(n *node[K, V], k K, v V) (nn *node[K, V]) {
-	if n == nil {
-		parser, key, tail := r.newParser(k)
-		nn = r.newNode(key, parser)
-		if tail == nil {
-			nn.value = v
-		} else {
-			nn = r.putRec(nn, tail, v)
-		}
-	} else {
-		c, tn, tp := n.parser.Compare(n.key, k)
-		if c != nil {
-			if tn != nil {
-				nn = r.putRec(nil, c, nil)
-				n.key = tn
-				nn.nodes = append(nn.nodes, n)
+func (r *Radix[K, V]) putRec(n *node[K, V], keyIter KeyIterable[K], value *V) (nn *node[K, V]) {
+	if keyIter.hasNext() {
+		key := keyIter.Next()
+		if n == nil {
+			nn = r.newNode(key)
+			if keyIter.hasNext() {
+				nn = r.putRec(nn, keyIter, value)
 			} else {
-				nn = n
+				nn.v = value
 			}
-		}
-		if tp != nil {
-			var np *node[K, V]
-			for _, child := range n.nodes {
-				if cc, _, _ := child.parser.Compare(child.key, tp); cc != nil {
-					np = r.putRec(child, tp, v)
-					break
+		} else {
+			c, tn, tp, _ := n.k.Match(key.Value())
+			if c != nil && c.hasNext() {
+				if tn != nil && tn.hasNext() {
+					nn = r.putRec(nil, c, nil)
+					n.k = tn.Next()
+					nn.nodes = append(nn.nodes, n)
+				} else {
+					nn = n
 				}
 			}
-			if np == nil {
-				np = r.putRec(nil, tp, v)
-			}
-			nn.nodes = append(nn.nodes, np)
-		} else {
-			if nn.value == nil {
-				nn.value = v
+			if tp != nil && tp.hasNext() {
+				var tpn *node[K, V]
+				for _, child := range n.nodes {
+					if cc, _, _, _ := child.k.Match(tp.Next().Value()); cc != nil && cc.hasNext() {
+						tpn = r.putRec(child, tp, value)
+						break
+					}
+				}
+				if tpn == nil {
+					tpn = r.putRec(nil, tp, value)
+				}
+				nn.nodes = append(nn.nodes, tpn)
+			} else if nn.v == nil {
+				nn.v = value
 			} else {
-				log.Fatalf("Input key error, %#v\t", errors.New(fmt.Sprintf(`duplicated key:%#v`, k)))
+				log.Fatalf("Input key error, %#v\t", errors.New(fmt.Sprintf(`duplicated key:%#v`, key)))
 			}
 		}
 	}
