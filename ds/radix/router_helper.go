@@ -29,7 +29,7 @@ type (
 
 	regexKey struct {
 		wildcardKey
-		patterns linkedhashmap.Map[string, *regexp.Regexp]
+		patterns *linkedhashmap.Map[string, *regexp.Regexp]
 	}
 
 	keyIterator struct {
@@ -130,14 +130,12 @@ func (rk *regexKey) Value() string {
 	return rk.value
 }
 
-func (rk *regexKey) parsePatterns(part string) (patterns map[string]*regexp.Regexp) {
-	patterns = map[string]*regexp.Regexp{}
+func (rk *regexKey) parsePatterns(part string) (patterns *linkedhashmap.Map[string, *regexp.Regexp]) {
+	patterns = linkedhashmap.New[string, *regexp.Regexp]()
 	for len(part) != 0 {
 		if i := strings.Index(part, string(RegexBegin)); i == -1 {
-			rk.patterns[part] = nil
+			rk.patterns.Put(part, nil)
 			part = ""
-			patterns, part = append(patterns, &rePattern{part, nil}), ""
-			rk.
 		} else if i == 0 {
 			delim := newReDelim()
 			for ; i < len(part); i++ {
@@ -154,7 +152,8 @@ func (rk *regexKey) parsePatterns(part string) (patterns map[string]*regexp.Rege
 					if l < 3 {
 						log.Fatalf("Expression parsing error, #%v", errors.New(`invalid expression:`+before))
 					}
-					patterns, part = append(patterns, &rePattern{before, regexp.MustCompile(before[1 : l-1])}), after
+					rk.patterns.Put(before, regexp.MustCompile(before[1:l-1]))
+					part = after
 					break
 				}
 			}
@@ -162,7 +161,7 @@ func (rk *regexKey) parsePatterns(part string) (patterns map[string]*regexp.Rege
 				log.Fatalf("Expression parsing error, #%v", errors.New(`invalid expression:`+part))
 			}
 		} else {
-			patterns = append(patterns, &rePattern{part[:i], nil})
+			rk.patterns.Put(part[:i], nil)
 			part = part[i:]
 		}
 	}
