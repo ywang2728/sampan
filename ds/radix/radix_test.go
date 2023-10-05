@@ -1,18 +1,22 @@
 package radix
 
 import (
+	"errors"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"log"
 	"regexp"
+	"strings"
+	"sync/atomic"
 	"testing"
 )
 
 const (
-	PathSeparator = "/"
-	RegexBegin    = "{"
-	RegexEnd      = "}"
-	WildcardStar  = "*"
-	WildcardColon = ":"
+	PathSeparator = '/'
+	RegexBegin    = '{'
+	RegexEnd      = '}'
+	WildcardStar  = '*'
+	WildcardColon = ':'
 )
 
 type (
@@ -27,20 +31,41 @@ type (
 
 	regexKey struct {
 		wildcardKey
-		compiled *regexp.Regexp
+		patterns map[string]*regexp.Regexp
 	}
 
 	keyIterator struct {
 		index int
 		keys  []Key[string]
 	}
+
+	reDelim struct {
+		cnt atomic.Int32
+	}
 )
 
+// Regex expression delimiter
+func newReDelim() (delim *reDelim) {
+	return &reDelim{atomic.Int32{}}
+}
+func (rd *reDelim) reset() {
+	rd.cnt.Store(0)
+}
+func (rd *reDelim) open() (opened bool) {
+	return 0 != rd.cnt.Add(1)
+}
+func (rd *reDelim) close() (closed bool) {
+	return 0 == rd.cnt.Add(-1)
+}
+func (rd *reDelim) closed() bool {
+	return 0 == rd.cnt.Load()
+}
+func (rd *reDelim) load() int32 {
+	return rd.cnt.Load()
+}
+
 func (ki *keyIterator) hasNext() bool {
-	if ki.index < len(ki.keys) {
-		return true
-	}
-	return false
+	return ki.index < len(ki.keys)
 
 }
 func (ki *keyIterator) Next() Key[string] {
@@ -52,13 +77,13 @@ func (ki *keyIterator) Next() Key[string] {
 	return nil
 }
 
-func (sk *staticKey) Match(k string) (c KeyIterable[string], tn KeyIterable[string], tp KeyIterable[string], p *map[string]string) {
+func (sk *staticKey) Match(k string) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], p *map[string]string) {
 	i, ln, lp := 0, len(sk.value), len(k)
-	min := ln
-	if min > lp {
-		min = lp
+	m := ln
+	if m > lp {
+		m = lp
 	}
-	for ; i < min; i++ {
+	for ; i < m; i++ {
 		if sk.value[i] != k[i] {
 			break
 		}
@@ -107,8 +132,47 @@ func (rk *regexKey) Value() string {
 	return rk.value
 }
 
+func (rk *regexKey) parsePatterns(part string) (patterns map[string]*regexp.Regexp) {
+	patterns = map[string]*regexp.Regexp{}
+	for len(part) != 0 {
+		if i := strings.Index(part, string(RegexBegin)); i == -1 {
+			rk.patterns[part] = nil
+			part = ""
+			patterns, part = append(patterns, &rePattern{part, nil}), ""
+		} else if i == 0 {
+			delim := newReDelim()
+			for ; i < len(part); i++ {
+				if part[i] == RegexBegin {
+					delim.open()
+				} else if part[i] == RegexEnd && delim.close() {
+					var before, after string
+					if i == len(part)-1 {
+						before, after = part, ""
+					} else {
+						before, after = part[:i+1], part[i+1:]
+					}
+					l := len(before)
+					if l < 3 {
+						log.Fatalf("Expression parsing error, #%v", errors.New(`invalid expression:`+before))
+					}
+					patterns, part = append(patterns, &rePattern{before, regexp.MustCompile(before[1 : l-1])}), after
+					break
+				}
+			}
+			if !delim.closed() {
+				log.Fatalf("Expression parsing error, #%v", errors.New(`invalid expression:`+part))
+			}
+		} else {
+			patterns = append(patterns, &rePattern{part[:i], nil})
+			part = part[i:]
+		}
+	}
+	return
+}
+
 // Main logic for parse the raw path, parse as much as the Key type allowed chars.
-func buildKeyIterFunc(k string) (ki KeyIterable[string]) {
+func buildKeyIterFunc(k string) (ki KeyIterator[string]) {
+
 	ki = &keyIterator{
 		keys: []Key[string]{&staticKey{k}},
 	}
@@ -123,9 +187,9 @@ func TestStringKey(t *testing.T) {
 	tcs := []struct {
 		value    string
 		path     string
-		common   KeyIterable[string]
-		tailKey  KeyIterable[string]
-		tailPath KeyIterable[string]
+		common   KeyIterator[string]
+		tailKey  KeyIterator[string]
+		tailPath KeyIterator[string]
 	}{
 		{value: "/", path: "/abc", common: buildKeyIterFunc("/"), tailKey: nil, tailPath: buildKeyIterFunc("abc")},
 		{value: "/abc", path: "/", common: buildKeyIterFunc("/"), tailKey: buildKeyIterFunc("abc"), tailPath: nil},

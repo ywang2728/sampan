@@ -13,10 +13,10 @@ type (
 		fmt.Stringer
 		Value() K
 		// Match the current key with input key, return common prefix, and tails of current key and input key.
-		Match(K) (KeyIterable[K], KeyIterable[K], KeyIterable[K], *map[K]K)
+		Match(K) (KeyIterator[K], KeyIterator[K], KeyIterator[K], *map[K]K)
 	}
 
-	KeyIterable[K comparable] interface {
+	KeyIterator[K comparable] interface {
 		hasNext() bool
 		Next() Key[K]
 	}
@@ -31,12 +31,12 @@ type (
 		size int
 		root *node[K, V]
 		// Func to build Key Iterator, the Key struct could be String, Wildcard, or Regex.
-		buildKeyIter func(K) KeyIterable[K]
-		mtx          sync.RWMutex
+		buildKeyIter func(K) KeyIterator[K]
+		mutex        sync.RWMutex
 	}
 )
 
-func New[K comparable, V any](keyIterFunc func(K) KeyIterable[K]) *Radix[K, V] {
+func New[K comparable, V any](keyIterFunc func(K) KeyIterator[K]) *Radix[K, V] {
 	return &Radix[K, V]{
 		buildKeyIter: keyIterFunc,
 	}
@@ -52,8 +52,8 @@ func (r *Radix[K, V]) newNode(k Key[K]) (n *node[K, V]) {
 
 func (r *Radix[K, V]) Clear() {
 	if r != nil {
-		r.mtx.Lock()
-		defer r.mtx.Unlock()
+		r.mutex.Lock()
+		defer r.mutex.Unlock()
 		r.root = nil
 		r.size = 0
 	}
@@ -63,8 +63,8 @@ func (r *Radix[K, V]) Len() int {
 	if r == nil {
 		return 0
 	}
-	r.mtx.RLock()
-	defer r.mtx.RUnlock()
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
 	if r.root == nil {
 		return 0
 	}
@@ -85,8 +85,8 @@ func (r *Radix[K, V]) String() string {
 }
 
 func (r *Radix[K, V]) put(k K, v V) (b bool) {
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	if nr := r.putRec(r.root, r.buildKeyIter(k), &v); nr != nil {
 		r.root = nr
 		r.size++
@@ -95,7 +95,7 @@ func (r *Radix[K, V]) put(k K, v V) (b bool) {
 	return
 }
 
-func (r *Radix[K, V]) putRec(n *node[K, V], keyIter KeyIterable[K], value *V) (nn *node[K, V]) {
+func (r *Radix[K, V]) putRec(n *node[K, V], keyIter KeyIterator[K], value *V) (nn *node[K, V]) {
 	if keyIter.hasNext() {
 		key := keyIter.Next()
 		if n == nil {

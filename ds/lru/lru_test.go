@@ -5,18 +5,11 @@ import (
 	"testing"
 )
 
-type (
-	testValue struct {
-		data   int
-		params map[string]string
-	}
-)
-
 func TestNew(t *testing.T) {
 	cache := New[string, any](1)
 	assert.NotNil(t, cache)
 	assert.NotNil(t, cache.list)
-	assert.NotNil(t, cache.keys)
+	assert.NotNil(t, cache.dict)
 }
 
 func TestPutAndLen(t *testing.T) {
