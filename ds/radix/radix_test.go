@@ -3,6 +3,7 @@ package radix
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"strings"
 	"testing"
 )
 
@@ -69,4 +70,9 @@ func TestPutRecWithStringKeySingleNode(t *testing.T) {
 	assert.NotNil(t, r.root)
 	assert.Equal(t, 1, r.Len())
 	assert.Equal(t, "/aaa", fmt.Sprint(r.root.k))
+}
+
+func TestToto(t *testing.T) {
+	a := "hello world"
+	println(strings.ContainsAny(a, "ses"))
 }
