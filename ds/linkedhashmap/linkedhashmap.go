@@ -59,6 +59,14 @@ func New[K comparable, V any]() *Map[K, V] {
 	}
 }
 
+func NewFromMap[K comparable, V any](m map[K]V) (lm *Map[K, V]) {
+	lm = New[K, V]()
+	for k, v := range m {
+		lm.Put(k, v)
+	}
+	return
+}
+
 func (m *Map[K, V]) len() int {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -123,6 +131,11 @@ func (m *Map[K, V]) String() string {
 		str += fmt.Sprintf("%v:%v ", e.Value, m.dict[e.Value.(K)])
 	}
 	return strings.TrimRight(str, " ") + "]"
+}
+
+func (m *Map[K, V]) Contains(k K) (ok bool) {
+	_, ok = m.dict[k]
+	return
 }
 
 func (m *Map[K, V]) Iter() MapIterator[K, V] {

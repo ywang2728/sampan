@@ -13,6 +13,20 @@ func TestMapNew(t *testing.T) {
 	assert.NotNil(t, m.dict)
 }
 
+func TestMapNewFromMap(t *testing.T) {
+	tcs := []struct {
+		m map[string]string
+	}{
+		{m: map[string]string{}},
+		{m: map[string]string{"a": "1"}},
+		{m: map[string]string{"a": "1", "b": "2", "c": "3"}},
+	}
+	for _, tc := range tcs {
+		lm := NewFromMap(tc.m)
+		assert.Equal(t, len(tc.m), lm.len())
+	}
+}
+
 type kv struct {
 	k string
 	v string
@@ -284,5 +298,23 @@ func TestMapIter(t *testing.T) {
 				assert.Equal(t, tc.kvList[i].v, v)
 			}
 		}
+	}
+}
+
+func TestMapContains(t *testing.T) {
+	tcs := []struct {
+		m map[string]string
+	}{
+		{m: map[string]string{}},
+		{m: map[string]string{"a": "1"}},
+		{m: map[string]string{"a": "1", "b": "2", "c": "3"}},
+	}
+	for _, tc := range tcs {
+		lm := NewFromMap(tc.m)
+		assert.Equal(t, len(tc.m), lm.len())
+		for k := range tc.m {
+			assert.True(t, lm.Contains(k))
+		}
+		assert.False(t, lm.Contains("haha"))
 	}
 }

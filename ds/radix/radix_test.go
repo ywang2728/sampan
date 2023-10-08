@@ -3,7 +3,6 @@ package radix
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"strings"
 	"testing"
 )
 
@@ -73,6 +72,8 @@ func TestPutRecWithStringKeySingleNode(t *testing.T) {
 }
 
 func TestToto(t *testing.T) {
-	a := "hello world"
-	println(strings.ContainsAny(a, "ses"))
+	a := make(map[string]int)
+	a["*"] = 1
+	a["*"] = 2
+	fmt.Printf("%+v", a)
 }
