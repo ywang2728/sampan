@@ -6,6 +6,109 @@ import (
 	"testing"
 )
 
+func TestNewKeySeparator(t *testing.T) {
+	tcs := []struct {
+		bgn string
+		end string
+	}{
+		{bgn: "(", end: ")"},
+		{bgn: ":", end: "/"},
+		{bgn: "{", end: "}"},
+	}
+	for _, tc := range tcs {
+		ks := newKeySeparator(tc.bgn, tc.end)
+		assert.NotNil(t, ks)
+		assert.Equal(t, ks.bs, tc.bgn)
+		assert.Equal(t, ks.es, tc.end)
+	}
+}
+
+func TestKeySeparatorIsOpenedAndIsClosed(t *testing.T) {
+	tcs := []struct {
+		bgn      string
+		end      string
+		char     string
+		isOpened bool
+		isClosed bool
+	}{
+		{bgn: "(", end: ")", char: "(", isOpened: true, isClosed: false},
+		{bgn: ":", end: "/", char: "(", isOpened: false, isClosed: true},
+		{bgn: "{", end: "}", char: "(", isOpened: false, isClosed: true},
+	}
+	for _, tc := range tcs {
+		ks := newKeySeparator(tc.bgn, tc.end)
+		assert.False(t, ks.isOpened())
+		assert.True(t, ks.isClosed())
+		ks.open(tc.char)
+		assert.Equal(t, tc.isOpened, ks.isOpened())
+		assert.Equal(t, tc.isClosed, ks.isClosed())
+	}
+}
+
+func TestKeySeparatorOpenAndClose(t *testing.T) {
+	tcs := []struct {
+		bgn         string
+		end         string
+		bgnChars    []string
+		endChars    []string
+		closedTimes int
+		isOpened    bool
+		isClosed    bool
+	}{
+		{bgn: "(", end: ")", bgnChars: []string{"(", "("}, endChars: []string{")", ")"}, closedTimes: 0, isOpened: true, isClosed: true},
+		{bgn: ":", end: "/", bgnChars: []string{":"}, endChars: []string{"/"}, closedTimes: 0, isOpened: true, isClosed: true},
+		{bgn: "{", end: "}", bgnChars: []string{"{", "{"}, endChars: []string{"}", ")"}, closedTimes: 1, isOpened: true, isClosed: false},
+	}
+	for _, tc := range tcs {
+		ks := newKeySeparator(tc.bgn, tc.end)
+		var times int
+		var status bool
+		for _, c := range tc.bgnChars {
+			times, status = ks.open(c)
+		}
+		assert.Equal(t, len(tc.bgnChars), times)
+		assert.Equal(t, tc.isOpened, status)
+		for _, c := range tc.endChars {
+			times, status = ks.close(c)
+		}
+		assert.Equal(t, tc.closedTimes, times)
+		assert.Equal(t, tc.isClosed, status)
+	}
+}
+
+func TestKeySeparatorOpenAndForceClose(t *testing.T) {
+	tcs := []struct {
+		bgn           string
+		end           string
+		bgnChars      []string
+		endChars      []string
+		closedTimes   int
+		isOpened      bool
+		isClosed      bool
+		isForceClosed bool
+	}{
+		{bgn: "{", end: "}", bgnChars: []string{"{", "{"}, endChars: []string{"}", ")"}, closedTimes: 0, isOpened: true, isClosed: false, isForceClosed: true},
+	}
+	for _, tc := range tcs {
+		ks := newKeySeparator(tc.bgn, tc.end)
+		var times int
+		var status bool
+		for _, c := range tc.bgnChars {
+			times, status = ks.open(c)
+		}
+		assert.Equal(t, len(tc.bgnChars), times)
+		assert.Equal(t, tc.isOpened, status)
+		for _, c := range tc.endChars {
+			times, status = ks.close(c)
+		}
+		assert.Equal(t, tc.isClosed, status)
+		times, status = ks.forceClose()
+		assert.Equal(t, tc.closedTimes, times)
+		assert.Equal(t, tc.isForceClosed, status)
+		assert.Equal(t, tc.isForceClosed, ks.isClosed())
+	}
+}
+
 func TestStringKey(t *testing.T) {
 	tcs := []struct {
 		value    string
@@ -69,11 +172,4 @@ func TestPutRecWithStringKeySingleNode(t *testing.T) {
 	assert.NotNil(t, r.root)
 	assert.Equal(t, 1, r.Len())
 	assert.Equal(t, "/aaa", fmt.Sprint(r.root.k))
-}
-
-func TestToto(t *testing.T) {
-	a := make(map[string]int)
-	a["*"] = 1
-	a["*"] = 2
-	fmt.Printf("%+v", a)
 }
