@@ -41,13 +41,13 @@ func TestKeySeparatorIsOpenedAndIsClosed(t *testing.T) {
 		ks := newKeySeparator(tc.bgn, tc.end)
 		assert.False(t, ks.isOpened())
 		assert.True(t, ks.isClosed())
-		ks.open(tc.char)
+		ks.openWith(tc.char)
 		assert.Equal(t, tc.isOpened, ks.isOpened())
 		assert.Equal(t, tc.isClosed, ks.isClosed())
 	}
 }
 
-func TestKeySeparatorOpenAndClose(t *testing.T) {
+func TestKeySeparatorOpenWithAndCloseWith(t *testing.T) {
 	tcs := []struct {
 		bgn         string
 		end         string
@@ -66,19 +66,19 @@ func TestKeySeparatorOpenAndClose(t *testing.T) {
 		var times int
 		var status bool
 		for _, c := range tc.bgnChars {
-			times, status = ks.open(c)
+			times, status = ks.openWith(c)
 		}
 		assert.Equal(t, len(tc.bgnChars), times)
 		assert.Equal(t, tc.isOpened, status)
 		for _, c := range tc.endChars {
-			times, status = ks.close(c)
+			times, status = ks.closeWith(c)
 		}
 		assert.Equal(t, tc.closedTimes, times)
 		assert.Equal(t, tc.isClosed, status)
 	}
 }
 
-func TestKeySeparatorOpenAndForceClose(t *testing.T) {
+func TestKeySeparatorOpenAndClose(t *testing.T) {
 	tcs := []struct {
 		bgn           string
 		end           string
@@ -95,16 +95,16 @@ func TestKeySeparatorOpenAndForceClose(t *testing.T) {
 		ks := newKeySeparator(tc.bgn, tc.end)
 		var times int
 		var status bool
-		for _, c := range tc.bgnChars {
-			times, status = ks.open(c)
+		for range tc.bgnChars {
+			times, status = ks.open()
 		}
 		assert.Equal(t, len(tc.bgnChars), times)
 		assert.Equal(t, tc.isOpened, status)
 		for _, c := range tc.endChars {
-			times, status = ks.close(c)
+			times, status = ks.closeWith(c)
 		}
 		assert.Equal(t, tc.isClosed, status)
-		times, status = ks.forceClose()
+		times, status = ks.close()
 		assert.Equal(t, tc.closedTimes, times)
 		assert.Equal(t, tc.isForceClosed, status)
 		assert.Equal(t, tc.isForceClosed, ks.isClosed())
@@ -134,6 +134,38 @@ func TestKeyIter(t *testing.T) {
 		for _, k := range tc.keys {
 			assert.True(t, ki.hasNext())
 			assert.Equal(t, k, ki.Next())
+		}
+		assert.False(t, ki.hasNext())
+	}
+}
+
+func TestBuildKeyIterFunc(t *testing.T) {
+	tcs := []struct {
+		key  string
+		keys []Key[string]
+	}{
+		//{key: "", keys: []Key[string]{}},
+		//{key: " ", keys: []Key[string]{}},
+		//{key: "/", keys: []Key[string]{&staticKey{"/"}}},
+		//{key: "abc", keys: []Key[string]{&staticKey{"abc"}}},
+		//{key: "/abc", keys: []Key[string]{&staticKey{"/abc"}}},
+		//{key: "abc/", keys: []Key[string]{&staticKey{"abc/"}}},
+		//{key: "/123/abc", keys: []Key[string]{&staticKey{"/123/abc"}}},
+		//{key: "/123/abc/", keys: []Key[string]{&staticKey{"/123/abc/"}}},
+		//{key: "123/abc/", keys: []Key[string]{&staticKey{"123/abc/"}}},
+		//{key: "*", keys: []Key[string]{&wildcardStarKey{value: "*", params: map[string]string{"*": ""}}}},
+		{key: "/*", keys: []Key[string]{&staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}}},
+		//{key: "/123/*", keys: []Key[string]{&staticKey{"/123/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}}},
+	}
+
+	for _, tc := range tcs {
+		ki := buildKeyIterFunc(tc.key)
+		assert.NotNil(t, ki)
+		for _, k := range tc.keys {
+			assert.True(t, ki.hasNext())
+			a := ki.Next()
+			fmt.Printf("result: %+v\n", a)
+			assert.Equal(t, k, a)
 		}
 		assert.False(t, ki.hasNext())
 	}

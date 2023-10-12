@@ -63,36 +63,38 @@ func (ks *keySeparator) reset() {
 func (ks *keySeparator) isOpened() bool {
 	return 0 != ks.cnt.Load()
 }
-func (ks *keySeparator) open(s string) (times int, opened bool) {
+func (ks *keySeparator) open() (times int, opened bool) {
+	before := ks.cnt.Load()
+	opened = before < ks.cnt.Add(1)
+	times = int(ks.cnt.Load())
+	return
+}
+func (ks *keySeparator) openWith(s string) (times int, opened bool) {
 	before := ks.cnt.Load()
 	if ks.bs == s {
 		opened = before < ks.cnt.Add(1)
 	}
-	times = int(ks.load())
+	times = int(ks.cnt.Load())
 	return
 }
-func (ks *keySeparator) close(s string) (times int, closed bool) {
-	before := ks.load()
+func (ks *keySeparator) closeWith(s string) (times int, closed bool) {
+	before := ks.cnt.Load()
 	if ks.es == s {
 		closed = before > ks.cnt.Add(-1)
 	}
-	times = int(ks.load())
+	times = int(ks.cnt.Load())
 	return
 }
 
-func (ks *keySeparator) forceClose() (times int, closed bool) {
-	before := ks.load()
+func (ks *keySeparator) close() (times int, closed bool) {
+	before := ks.cnt.Load()
 	after := ks.cnt.Add(-1)
 	closed = before > after && after >= 0
-	times = int(ks.load())
+	times = int(ks.cnt.Load())
 	return
 }
 func (ks *keySeparator) isClosed() bool {
 	return 0 == ks.cnt.Load()
-}
-
-func (ks *keySeparator) load() int32 {
-	return ks.cnt.Load()
 }
 
 func newKeyIter(keys ...Key[string]) KeyIterator[string] {
@@ -193,9 +195,9 @@ func (rk *regexKey) parsePatterns(part string) (patterns *linkedhashmap.Map[stri
 		} else if i == 0 {
 			ks := newKeySeparator(regexBegin, regexEnd)
 			for ; i < len(part); i++ {
-				if _, ok := ks.open(string(part[i])); ok {
+				if _, ok := ks.openWith(string(part[i])); ok {
 					continue
-				} else if _, ok := ks.close(string(part[i])); ok && ks.isClosed() {
+				} else if _, ok := ks.closeWith(string(part[i])); ok && ks.isClosed() {
 					var before, after string
 					if i == len(part)-1 {
 						before, after = part, ""
@@ -224,7 +226,7 @@ func (rk *regexKey) parsePatterns(part string) (patterns *linkedhashmap.Map[stri
 
 // Main logic for parse the raw path, parse as much as the Key type allowed chars.
 func buildKeyIterFunc(key string) (ki KeyIterator[string]) {
-	if key == "" {
+	if strings.TrimSpace(key) == "" {
 		return newKeyIter()
 	}
 	if !strings.ContainsAny(key, keySeparators) {
@@ -232,43 +234,52 @@ func buildKeyIterFunc(key string) (ki KeyIterator[string]) {
 	}
 	var keys []Key[string]
 	var ks *keySeparator
-	for cursor, ps := 0, -1; cursor < len(key); {
+	for cursor, i, ps := 0, 0, -1; cursor < len(key); {
 		switch string(key[cursor]) {
 		case pathSeparator:
 			ps = cursor
 			cursor++
 		case wildcardStar:
+			if i <= ps {
+				keys = append(keys, &staticKey{key[i : ps+1]})
+			}
+			ks = newKeySeparator(wildcardStar, pathSeparator)
+			ks.open()
 			var part string
-			for ks = newKeySeparator(wildcardStar, pathSeparator); ks.isOpened() && cursor < len(key); cursor++ {
-				if _, ok := ks.open(string(key[cursor])); ok {
+			for cursor++; ks.isOpened() && cursor < len(key); cursor++ {
+				if _, ok := ks.openWith(string(key[cursor])); ok {
 					continue
-				} else if _, ok := ks.close(string(key[cursor])); ok && ks.isClosed() {
+				} else if _, ok := ks.closeWith(string(key[cursor])); ok && ks.isClosed() {
 					part = key[ps+1 : cursor]
 					break
-				} else if cursor == len(key)-1 {
-					part = key[ps+1:]
-					ks.forceClose()
 				}
+			}
+			if cursor == len(key) && ks.isOpened() {
+				part = key[ps+1:]
+				ks.close()
 			}
 			if ks.isClosed() {
 				if strings.Count(part, wildcardStar) != 1 || strings.Contains(part, " ") {
 					log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid wildcard star key: %s at index: %d.`, key, cursor)))
 				}
 				pref, suf, _ := strings.Cut(part, wildcardStar)
-				keys = append(keys, &wildcardStarKey{value: part, prefix: pref, suffix: suf})
+				keys = append(keys, &wildcardStarKey{value: part, prefix: pref, suffix: suf, params: map[string]string{part: ""}})
 			} else {
 				log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid wildcard star key: %s at index: %d.`, key, cursor)))
 			}
 		case wildcardColon:
+			if i <= ps {
+				keys = append(keys, &staticKey{key[i : ps+1]})
+			}
 			var part string
 			for ks = newKeySeparator(wildcardColon, pathSeparator); ks.isOpened() && cursor < len(key); cursor++ {
-				if _, ok := ks.open(string(key[cursor])); ok {
+				if _, ok := ks.openWith(string(key[cursor])); ok {
 					continue
-				} else if _, ok := ks.close(string(key[cursor])); ok && ks.isClosed() {
+				} else if _, ok := ks.closeWith(string(key[cursor])); ok && ks.isClosed() {
 					part = key[ps+1 : cursor]
 				} else if cursor == len(key)-1 {
 					part = key[ps+1:]
-					ks.forceClose()
+					ks.close()
 				}
 			}
 			if ks.isClosed() {
@@ -280,6 +291,9 @@ func buildKeyIterFunc(key string) (ki KeyIterator[string]) {
 				log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid wildcard colon key: %s at index: %d.`, key, cursor)))
 			}
 		case regexBegin:
+			if i <= ps {
+				keys = append(keys, &staticKey{key[i : ps+1]})
+			}
 			var parts []string
 			var reBgn, reEnd int
 			patterns := linkedhashmap.New[string, *regexp.Regexp]()
@@ -289,7 +303,7 @@ func buildKeyIterFunc(key string) (ki KeyIterator[string]) {
 				reEnd = cursor
 			}
 			for ks = newKeySeparator(regexBegin, regexEnd); cursor < len(key) && (ks.isOpened() || pathSeparator != string(key[cursor])); cursor++ {
-				if times, ok := ks.open(string(key[cursor])); ok {
+				if times, ok := ks.openWith(string(key[cursor])); ok {
 					if times == 1 {
 						reBgn = cursor
 						if reEnd+1 < reBgn {
@@ -300,7 +314,7 @@ func buildKeyIterFunc(key string) (ki KeyIterator[string]) {
 							parts = append(parts, part)
 						}
 					}
-				} else if _, ok := ks.close(string(key[cursor])); ok && ks.isClosed() {
+				} else if _, ok := ks.closeWith(string(key[cursor])); ok && ks.isClosed() {
 					reEnd = cursor
 					if reBgn < reEnd {
 						part := key[reBgn : reEnd+1]
