@@ -38,8 +38,8 @@ type (
 
 	regexKey struct {
 		value    []string
-		params   map[string]string
 		patterns *linkedhashmap.Map[string, *regexp.Regexp]
+		params   map[string]string
 	}
 
 	keyIter struct {
@@ -224,6 +224,9 @@ func (rk *regexKey) parsePatterns(part string) (patterns *linkedhashmap.Map[stri
 
 // Main logic for parse the raw path, parse as much as the Key type allowed chars.
 func buildKeyIterFunc(key string) (ki KeyIterator[string]) {
+	if key == "" {
+		return newKeyIter()
+	}
 	if !strings.ContainsAny(key, keySeparators) {
 		return newKeyIter(&staticKey{key})
 	}

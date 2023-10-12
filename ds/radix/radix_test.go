@@ -3,6 +3,8 @@ package radix
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"github.com/ywang2728/sampan/ds/linkedhashmap"
+	"regexp"
 	"testing"
 )
 
@@ -106,6 +108,34 @@ func TestKeySeparatorOpenAndForceClose(t *testing.T) {
 		assert.Equal(t, tc.closedTimes, times)
 		assert.Equal(t, tc.isForceClosed, status)
 		assert.Equal(t, tc.isForceClosed, ks.isClosed())
+	}
+}
+
+func TestKeyIter(t *testing.T) {
+	tcs := []struct {
+		keys []Key[string]
+	}{
+		{
+			keys: []Key[string]{},
+		},
+		{
+			keys: []Key[string]{&staticKey{"abc"}},
+		},
+		{
+			keys: []Key[string]{&staticKey{"abc"}, &wildcardStarKey{"*", "abc", "133", map[string]string{"*": ""}}},
+		},
+		{
+			keys: []Key[string]{&staticKey{"abc"}, &wildcardStarKey{"*", "abc", "133", map[string]string{"*": ""}}, &regexKey{value: []string{"a", "{abc}", "123"}, patterns: linkedhashmap.New[string, *regexp.Regexp](), params: map[string]string{}}},
+		},
+	}
+	for _, tc := range tcs {
+		ki := newKeyIter(tc.keys...)
+		assert.NotNil(t, ki)
+		for _, k := range tc.keys {
+			assert.True(t, ki.hasNext())
+			assert.Equal(t, k, ki.Next())
+		}
+		assert.False(t, ki.hasNext())
 	}
 }
 
