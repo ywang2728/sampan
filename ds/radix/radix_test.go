@@ -215,6 +215,7 @@ func TestBuildKeyIterFunc(t *testing.T) {
 		{key: "123{abc}{\\w+}", keys: []Key[string]{&regexKey{value: []string{"123", "{abc}", "{\\w+}"}, patterns: compileRePattern("{abc}", "{\\w+}"), params: map[string]string{}}}},
 		{key: "123{abc}789{(?P<date>[a-z][0-9]?)}", keys: []Key[string]{&regexKey{value: []string{"123", "{abc}", "789", "{(?P<date>[a-z][0-9]?)}"}, patterns: compileRePattern("{abc}", "{(?P<date>[a-z][0-9]?)}"), params: map[string]string{"date": ""}}}},
 		{key: "123{abc}789{(?P<date>[a-z][0-9]?)}-{\\w+}", keys: []Key[string]{&regexKey{value: []string{"123", "{abc}", "789", "{(?P<date>[a-z][0-9]?)}", "-", "{\\w+}"}, patterns: compileRePattern("{abc}", "{(?P<date>[a-z][0-9]?)}", "{\\w+}"), params: map[string]string{"date": ""}}}},
+		{key: "hello-{(?P<abc>[a-z]+)}!=bonjour-{(?P<def>\\d\\w*)}-world/", keys: []Key[string]{&regexKey{value: []string{"hello-", "{(?P<abc>[a-z]+)}", "!=bonjour-", "{(?P<def>\\d\\w*)}", "-world"}, patterns: compileRePattern("{(?P<abc>[a-z]+)}", "{(?P<def>\\d\\w*)}"), params: map[string]string{"abc": "", "def": ""}}, &staticKey{"/"}}},
 	}
 
 	for _, tc := range tcs {
