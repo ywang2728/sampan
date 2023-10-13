@@ -226,111 +226,109 @@ func (rk *regexKey) parsePatterns(part string) (patterns *linkedhashmap.Map[stri
 
 // Main logic for parse the raw path, parse as much as the Key type allowed chars.
 func buildKeyIterFunc(key string) KeyIterator[string] {
-	if strings.TrimSpace(key) == "" {
-		return newKeyIter()
-	}
 	var keys []Key[string]
-	if strings.ContainsAny(key, keySeparators) {
-		var ks *keySeparator
-		var kb int
-		for cursor, ps := 0, -1; cursor < len(key); {
-			switch string(key[cursor]) {
-			case pathSeparator:
-				ps = cursor
-				cursor++
-			case wildcardStar, wildcardColon:
-				if kb <= ps {
-					keys = append(keys, &staticKey{key[kb : ps+1]})
-				}
-				wildcard := string(key[cursor])
-				ks = newKeySeparator(wildcard, pathSeparator)
-				ks.open()
-				var part string
-				for cursor++; ks.isOpened() && cursor < len(key); cursor++ {
-					if _, ok := ks.openWith(string(key[cursor])); ok {
-						continue
-					} else if _, ok := ks.closeWith(string(key[cursor])); ok && ks.isClosed() {
-						part = key[ps+1 : cursor]
-						break
+	if strings.TrimSpace(key) != "" {
+		if strings.ContainsAny(key, keySeparators) {
+			var ks *keySeparator
+			var kb int
+			for cursor, ps := 0, -1; cursor < len(key); {
+				switch string(key[cursor]) {
+				case pathSeparator:
+					ps = cursor
+					cursor++
+				case wildcardStar, wildcardColon:
+					if kb <= ps {
+						keys = append(keys, &staticKey{key[kb : ps+1]})
 					}
-				}
-				if cursor == len(key) && ks.isOpened() {
-					part = key[ps+1:]
-					ks.close()
-				}
-				if ks.isClosed() {
-					kb = cursor
-					if strings.Count(part, wildcard) != 1 || strings.Contains(part, " ") {
-						log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid wildcard key: %s at index: %d.`, key, cursor)))
+					wildcard := string(key[cursor])
+					ks = newKeySeparator(wildcard, pathSeparator)
+					ks.open()
+					var part string
+					for cursor++; ks.isOpened() && cursor < len(key); cursor++ {
+						if _, ok := ks.openWith(string(key[cursor])); ok {
+							continue
+						} else if _, ok := ks.closeWith(string(key[cursor])); ok && ks.isClosed() {
+							part = key[ps+1 : cursor]
+							break
+						}
 					}
-					if wildcard == wildcardStar {
-						pref, suf, _ := strings.Cut(part, wildcard)
-						keys = append(keys, &wildcardStarKey{value: wildcard, prefix: pref, suffix: suf, params: map[string]string{wildcard: ""}})
-					} else {
-						if len(part) == 1 || !strings.HasPrefix(part, wildcard) {
+					if cursor == len(key) && ks.isOpened() {
+						part = key[ps+1:]
+						ks.close()
+					}
+					if ks.isClosed() {
+						kb = cursor
+						if strings.Count(part, wildcard) != 1 || strings.Contains(part, " ") {
 							log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid wildcard key: %s at index: %d.`, key, cursor)))
 						}
-						suf, _ := strings.CutPrefix(part, wildcard)
-						keys = append(keys, &wildcardColonKey{value: part, params: map[string]string{suf: ""}})
-					}
-				} else {
-					log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid wildcard key: %s at index: %d.`, key, cursor)))
-				}
-			case regexBegin:
-				if kb <= ps {
-					keys = append(keys, &staticKey{key[kb : ps+1]})
-				}
-				var parts []string
-				if ps+1 < cursor {
-					parts = append(parts, key[ps+1:cursor])
-				}
-
-				patterns := linkedhashmap.New[string, *regexp.Regexp]()
-				params := map[string]string{}
-				ks = newKeySeparator(regexBegin, regexEnd)
-				ks.open()
-				reBgn, reEnd := cursor, 0
-				for cursor++; cursor < len(key) && (ks.isOpened() || pathSeparator != string(key[cursor])); cursor++ {
-					if times, ok := ks.openWith(string(key[cursor])); ok {
-						if times == 1 {
-							reBgn = cursor
-							if reEnd+1 < reBgn {
-								parts = append(parts, key[reEnd+1:reBgn])
+						if wildcard == wildcardStar {
+							pref, suf, _ := strings.Cut(part, wildcard)
+							keys = append(keys, &wildcardStarKey{value: wildcard, prefix: pref, suffix: suf, params: map[string]string{wildcard: ""}})
+						} else {
+							if len(part) == 1 || !strings.HasPrefix(part, wildcard) {
+								log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid wildcard key: %s at index: %d.`, key, cursor)))
 							}
+							suf, _ := strings.CutPrefix(part, wildcard)
+							keys = append(keys, &wildcardColonKey{value: part, params: map[string]string{suf: ""}})
 						}
-					} else if _, ok := ks.closeWith(string(key[cursor])); ok && ks.isClosed() {
-						reEnd = cursor
-						if reBgn < reEnd {
-							part := key[reBgn : reEnd+1]
-							parts = append(parts, part)
-							compiled := regexp.MustCompile(part)
-							patterns.Put(part, compiled)
-							for _, subExpName := range compiled.SubexpNames() {
-								if subExpName != "" {
-									params[subExpName] = ""
+					} else {
+						log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid wildcard key: %s at index: %d.`, key, cursor)))
+					}
+				case regexBegin:
+					if kb <= ps {
+						keys = append(keys, &staticKey{key[kb : ps+1]})
+					}
+					var parts []string
+					if ps+1 < cursor {
+						parts = append(parts, key[ps+1:cursor])
+					}
+					patterns := linkedhashmap.New[string, *regexp.Regexp]()
+					params := map[string]string{}
+					ks = newKeySeparator(regexBegin, regexEnd)
+					ks.open()
+					reBgn, reEnd := cursor, 0
+					for cursor++; cursor < len(key) && (ks.isOpened() || pathSeparator != string(key[cursor])); cursor++ {
+						if times, ok := ks.openWith(string(key[cursor])); ok {
+							if times == 1 {
+								reBgn = cursor
+								if reEnd+1 < reBgn {
+									parts = append(parts, key[reEnd+1:reBgn])
+								}
+							}
+						} else if _, ok := ks.closeWith(string(key[cursor])); ok && ks.isClosed() {
+							reEnd = cursor
+							if reBgn < reEnd {
+								part := key[reBgn : reEnd+1]
+								parts = append(parts, part)
+								compiled := regexp.MustCompile(part)
+								patterns.Put(part, compiled)
+								for _, subExpName := range compiled.SubexpNames() {
+									if subExpName != "" {
+										params[subExpName] = ""
+									}
 								}
 							}
 						}
 					}
+					if reEnd+1 < cursor {
+						parts = append(parts, key[reEnd+1:cursor])
+					}
+					if ks.isClosed() && len(parts) > 0 {
+						kb = cursor
+						keys = append(keys, &regexKey{value: parts, params: params, patterns: patterns})
+					} else {
+						log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid Regex key: %s at index: %d.`, key, cursor)))
+					}
+				default:
+					cursor++
 				}
-				if reEnd+1 < cursor {
-					parts = append(parts, key[reEnd+1:cursor])
-				}
-				if ks.isClosed() && len(parts) > 0 {
-					kb = cursor
-					keys = append(keys, &regexKey{value: parts, params: params, patterns: patterns})
-				} else {
-					log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid Regex key: %s at index: %d.`, key, cursor)))
-				}
-			default:
-				cursor++
 			}
+			if kb < len(key) {
+				keys = append(keys, &staticKey{key[kb:]})
+			}
+		} else {
+			keys = append(keys, &staticKey{key})
 		}
-		if kb < len(key) {
-			keys = append(keys, &staticKey{key[kb:]})
-		}
-	} else {
-		keys = append(keys, &staticKey{key})
 	}
 	return newKeyIter(keys...)
 }
