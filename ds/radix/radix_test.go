@@ -139,23 +139,82 @@ func TestKeyIter(t *testing.T) {
 	}
 }
 
+func compileRePattern(raws ...string) (m *linkedhashmap.Map[string, *regexp.Regexp]) {
+	m = linkedhashmap.New[string, *regexp.Regexp]()
+	for _, raw := range raws {
+		m.Put(raw, regexp.MustCompile(raw))
+	}
+	return m
+}
+
 func TestBuildKeyIterFunc(t *testing.T) {
 	tcs := []struct {
 		key  string
 		keys []Key[string]
 	}{
-		//{key: "", keys: []Key[string]{}},
-		//{key: " ", keys: []Key[string]{}},
-		//{key: "/", keys: []Key[string]{&staticKey{"/"}}},
-		//{key: "abc", keys: []Key[string]{&staticKey{"abc"}}},
-		//{key: "/abc", keys: []Key[string]{&staticKey{"/abc"}}},
-		//{key: "abc/", keys: []Key[string]{&staticKey{"abc/"}}},
-		//{key: "/123/abc", keys: []Key[string]{&staticKey{"/123/abc"}}},
-		//{key: "/123/abc/", keys: []Key[string]{&staticKey{"/123/abc/"}}},
-		//{key: "123/abc/", keys: []Key[string]{&staticKey{"123/abc/"}}},
-		//{key: "*", keys: []Key[string]{&wildcardStarKey{value: "*", params: map[string]string{"*": ""}}}},
+		{key: "", keys: []Key[string]{}},
+		{key: " ", keys: []Key[string]{}},
+		{key: "/", keys: []Key[string]{&staticKey{"/"}}},
+		{key: "abc", keys: []Key[string]{&staticKey{"abc"}}},
+		{key: "/abc", keys: []Key[string]{&staticKey{"/abc"}}},
+		{key: "abc/", keys: []Key[string]{&staticKey{"abc/"}}},
+		{key: "/123/abc", keys: []Key[string]{&staticKey{"/123/abc"}}},
+		{key: "/123/abc/", keys: []Key[string]{&staticKey{"/123/abc/"}}},
+		{key: "123/abc/", keys: []Key[string]{&staticKey{"123/abc/"}}},
+		{key: "*", keys: []Key[string]{&wildcardStarKey{value: "*", params: map[string]string{"*": ""}}}},
+		{key: "abc*", keys: []Key[string]{&wildcardStarKey{value: "*", prefix: "abc", params: map[string]string{"*": ""}}}},
+		{key: "abc*123", keys: []Key[string]{&wildcardStarKey{value: "*", prefix: "abc", suffix: "123", params: map[string]string{"*": ""}}}},
 		{key: "/*", keys: []Key[string]{&staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}}},
-		//{key: "/123/*", keys: []Key[string]{&staticKey{"/123/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}}},
+		{key: "/abc*", keys: []Key[string]{&staticKey{"/"}, &wildcardStarKey{value: "*", prefix: "abc", params: map[string]string{"*": ""}}}},
+		{key: "/abc*123", keys: []Key[string]{&staticKey{"/"}, &wildcardStarKey{value: "*", prefix: "abc", suffix: "123", params: map[string]string{"*": ""}}}},
+		{key: "*/", keys: []Key[string]{&wildcardStarKey{value: "*", params: map[string]string{"*": ""}}, &staticKey{"/"}}},
+		{key: "abc*/", keys: []Key[string]{&wildcardStarKey{value: "*", prefix: "abc", params: map[string]string{"*": ""}}, &staticKey{"/"}}},
+		{key: "abc*123/", keys: []Key[string]{&wildcardStarKey{value: "*", prefix: "abc", suffix: "123", params: map[string]string{"*": ""}}, &staticKey{"/"}}},
+		{key: "/*/", keys: []Key[string]{&staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}, &staticKey{"/"}}},
+		{key: "/abc*/", keys: []Key[string]{&staticKey{"/"}, &wildcardStarKey{value: "*", prefix: "abc", params: map[string]string{"*": ""}}, &staticKey{"/"}}},
+		{key: "/abc*123/", keys: []Key[string]{&staticKey{"/"}, &wildcardStarKey{value: "*", prefix: "abc", suffix: "123", params: map[string]string{"*": ""}}, &staticKey{"/"}}},
+		{key: "/123/*", keys: []Key[string]{&staticKey{"/123/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}}},
+		{key: "*/123", keys: []Key[string]{&wildcardStarKey{value: "*", params: map[string]string{"*": ""}}, &staticKey{"/123"}}},
+		{key: "*/123/", keys: []Key[string]{&wildcardStarKey{value: "*", params: map[string]string{"*": ""}}, &staticKey{"/123/"}}},
+		{key: "/*/123/", keys: []Key[string]{&staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}, &staticKey{"/123/"}}},
+		{key: "/abc/*/123/", keys: []Key[string]{&staticKey{"/abc/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}, &staticKey{"/123/"}}},
+		{key: "/abc/def*/123/", keys: []Key[string]{&staticKey{"/abc/"}, &wildcardStarKey{value: "*", prefix: "def", params: map[string]string{"*": ""}}, &staticKey{"/123/"}}},
+		{key: "/abc/*hij/123/", keys: []Key[string]{&staticKey{"/abc/"}, &wildcardStarKey{value: "*", suffix: "hij", params: map[string]string{"*": ""}}, &staticKey{"/123/"}}},
+		{key: "/abc/def*hij/123/", keys: []Key[string]{&staticKey{"/abc/"}, &wildcardStarKey{value: "*", prefix: "def", suffix: "hij", params: map[string]string{"*": ""}}, &staticKey{"/123/"}}},
+		{key: ":abc", keys: []Key[string]{&wildcardColonKey{value: ":abc", params: map[string]string{"abc": ""}}}},
+		{key: "/:abc", keys: []Key[string]{&staticKey{"/"}, &wildcardColonKey{value: ":abc", params: map[string]string{"abc": ""}}}},
+		{key: ":abc/", keys: []Key[string]{&wildcardColonKey{value: ":abc", params: map[string]string{"abc": ""}}, &staticKey{"/"}}},
+		{key: "/:abc/", keys: []Key[string]{&staticKey{"/"}, &wildcardColonKey{value: ":abc", params: map[string]string{"abc": ""}}, &staticKey{"/"}}},
+		{key: "/:abc/123/", keys: []Key[string]{&staticKey{"/"}, &wildcardColonKey{value: ":abc", params: map[string]string{"abc": ""}}, &staticKey{"/123/"}}},
+		{key: "/123/:abc/", keys: []Key[string]{&staticKey{"/123/"}, &wildcardColonKey{value: ":abc", params: map[string]string{"abc": ""}}, &staticKey{"/"}}},
+		{key: "/123/:abc/789/", keys: []Key[string]{&staticKey{"/123/"}, &wildcardColonKey{value: ":abc", params: map[string]string{"abc": ""}}, &staticKey{"/789/"}}},
+		{key: "{abc}", keys: []Key[string]{&regexKey{value: []string{"{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}}},
+		{key: "/{abc}", keys: []Key[string]{&staticKey{"/"}, &regexKey{value: []string{"{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}}},
+		{key: "/{abc}/", keys: []Key[string]{&staticKey{"/"}, &regexKey{value: []string{"{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}}},
+		{key: "123{abc}", keys: []Key[string]{&regexKey{value: []string{"123", "{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}}},
+		{key: "123{abc}789", keys: []Key[string]{&regexKey{value: []string{"123", "{abc}", "789"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}}},
+		{key: "/123{abc}789", keys: []Key[string]{&staticKey{"/"}, &regexKey{value: []string{"123", "{abc}", "789"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}}},
+		{key: "123{abc}789/", keys: []Key[string]{&regexKey{value: []string{"123", "{abc}", "789"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}}},
+		{key: "/123{abc}789/", keys: []Key[string]{&staticKey{"/"}, &regexKey{value: []string{"123", "{abc}", "789"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}}},
+		{key: "/123{abc}789{def}/", keys: []Key[string]{&staticKey{"/"}, &regexKey{value: []string{"123", "{abc}", "789", "{def}"}, patterns: compileRePattern("{abc}", "{def}"), params: map[string]string{}}, &staticKey{"/"}}},
+		{key: "toto/123{abc}789{def}", keys: []Key[string]{&staticKey{"toto/"}, &regexKey{value: []string{"123", "{abc}", "789", "{def}"}, patterns: compileRePattern("{abc}", "{def}"), params: map[string]string{}}}},
+		{key: "/toto/123{abc}789{def}", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123", "{abc}", "789", "{def}"}, patterns: compileRePattern("{abc}", "{def}"), params: map[string]string{}}}},
+		{key: "/toto/123{abc}789{def}/hoho/", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123", "{abc}", "789", "{def}"}, patterns: compileRePattern("{abc}", "{def}"), params: map[string]string{}}, &staticKey{"/hoho/"}}},
+		{key: "{abc}/*", keys: []Key[string]{&regexKey{value: []string{"{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}}},
+		{key: ":xyz/{abc}/*", keys: []Key[string]{&wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/"}, &regexKey{value: []string{"{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}}},
+		{key: "/:xyz/{abc}/*", keys: []Key[string]{&staticKey{"/"}, &wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/"}, &regexKey{value: []string{"{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}}},
+		{key: "/:xyz/{abc}/*/", keys: []Key[string]{&staticKey{"/"}, &wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/"}, &regexKey{value: []string{"{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}, &staticKey{"/"}}},
+		{key: "/123{abc}/*", keys: []Key[string]{&staticKey{"/"}, &regexKey{value: []string{"123", "{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}}},
+		{key: "/123{abc}/*/", keys: []Key[string]{&staticKey{"/"}, &regexKey{value: []string{"123", "{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}, &staticKey{"/"}}},
+		{key: "/toto/123{abc}/*/hoho", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123", "{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}, &staticKey{"/hoho"}}},
+		{key: "/toto/123{abc}789/:xyz/hoho/", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123", "{abc}", "789"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/hoho/"}}},
+		{key: "/toto/123{abc}789/:xyz/hoho/pre*", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123", "{abc}", "789"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/hoho/"}, &wildcardStarKey{value: "*", prefix: "pre", params: map[string]string{"*": ""}}}},
+		{key: "/toto/123-{(?P<date>[a-z][0-9]?)}-789/:xyz/hoho/pre*/", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123-", "{(?P<date>[a-z][0-9]?)}", "-789"}, patterns: compileRePattern("{(?P<date>[a-z][0-9]?)}"), params: map[string]string{"date": ""}}, &staticKey{"/"}, &wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/hoho/"}, &wildcardStarKey{value: "*", prefix: "pre", params: map[string]string{"*": ""}}, &staticKey{"/"}}},
+		{key: "/toto/123-{(?P<date>[a-z][0-9]?)}-789-{\\w+}/:xyz/hoho/pre*/", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123-", "{(?P<date>[a-z][0-9]?)}", "-789-", "{\\w+}"}, patterns: compileRePattern("{(?P<date>[a-z][0-9]?)}", "{\\w+}"), params: map[string]string{"date": ""}}, &staticKey{"/"}, &wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/hoho/"}, &wildcardStarKey{value: "*", prefix: "pre", params: map[string]string{"*": ""}}, &staticKey{"/"}}},
+		{key: "123{abc}789{\\w+}", keys: []Key[string]{&regexKey{value: []string{"123", "{abc}", "789", "{\\w+}"}, patterns: compileRePattern("{abc}", "{\\w+}"), params: map[string]string{}}}},
+		{key: "123{abc}{\\w+}", keys: []Key[string]{&regexKey{value: []string{"123", "{abc}", "{\\w+}"}, patterns: compileRePattern("{abc}", "{\\w+}"), params: map[string]string{}}}},
+		{key: "123{abc}789{(?P<date>[a-z][0-9]?)}", keys: []Key[string]{&regexKey{value: []string{"123", "{abc}", "789", "{(?P<date>[a-z][0-9]?)}"}, patterns: compileRePattern("{abc}", "{(?P<date>[a-z][0-9]?)}"), params: map[string]string{"date": ""}}}},
+		{key: "123{abc}789{(?P<date>[a-z][0-9]?)}-{\\w+}", keys: []Key[string]{&regexKey{value: []string{"123", "{abc}", "789", "{(?P<date>[a-z][0-9]?)}", "-", "{\\w+}"}, patterns: compileRePattern("{abc}", "{(?P<date>[a-z][0-9]?)}", "{\\w+}"), params: map[string]string{"date": ""}}}},
 	}
 
 	for _, tc := range tcs {
@@ -163,9 +222,7 @@ func TestBuildKeyIterFunc(t *testing.T) {
 		assert.NotNil(t, ki)
 		for _, k := range tc.keys {
 			assert.True(t, ki.hasNext())
-			a := ki.Next()
-			fmt.Printf("result: %+v\n", a)
-			assert.Equal(t, k, a)
+			assert.Equal(t, k, ki.Next())
 		}
 		assert.False(t, ki.hasNext())
 	}
