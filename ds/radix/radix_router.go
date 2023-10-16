@@ -128,49 +128,48 @@ func (sk *staticKey) Match(k string) (c KeyIterator[string], tn KeyIterator[stri
 		}
 	}
 	if i > 0 {
-		c = buildKeyIterFunc(sk.value[:i])
+		c = newKeyIter(&staticKey{sk.value[:i]})
 	}
 	if i < ln {
-		tn = buildKeyIterFunc(sk.value[i:])
+		tn = newKeyIter(&staticKey{sk.value[i:]})
 	}
 	if i < lp {
-		tp = buildKeyIterFunc(k[i:])
+		tp = newKeyIter(&staticKey{k[i:]})
 	}
 	return
 }
 
 func (sk *staticKey) String() string {
-	return sk.Value()
+	return fmt.Sprintf("&{value:%+v}", sk.value)
 }
 
 func (sk *staticKey) Value() string {
 	return sk.value
 }
 
-func (wk *wildcardStarKey) Match(k string) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], p *map[string]string) {
+func (wsk *wildcardStarKey) Match(k string) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], p *map[string]string) {
 	fmt.Println(k)
 	return
 }
 
-func (wk *wildcardStarKey) String() string {
-	return wk.Value()
+func (wsk *wildcardStarKey) String() string {
+	return fmt.Sprintf("&{value:%+v, prefix:%+v, suffix:%+v, params:%+v}", wsk.value, wsk.prefix, wsk.suffix, wsk.params)
 }
 
-func (wk *wildcardStarKey) Value() string {
-	return wk.value
+func (wsk *wildcardStarKey) Value() string {
+	return wsk.value
 }
 
-func (wk *wildcardColonKey) Match(k string) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], p *map[string]string) {
-	fmt.Println(k)
+func (wck *wildcardColonKey) Match(k string) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], p *map[string]string) {
 	return
 }
 
-func (wk *wildcardColonKey) String() string {
-	return wk.Value()
+func (wck *wildcardColonKey) String() string {
+	return fmt.Sprintf("&{value:%+v, params:%+v}", wck.value, wck.params)
 }
 
-func (wk *wildcardColonKey) Value() string {
-	return wk.value
+func (wck *wildcardColonKey) Value() string {
+	return wck.value
 }
 
 func (rk *regexKey) Match(k string) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], p *map[string]string) {
@@ -225,7 +224,7 @@ func (rk *regexKey) parsePatterns(part string) (patterns *linkedhashmap.Map[stri
 }
 
 // Main logic for parse the raw path, parse as much as the Key type allowed chars.
-func buildKeyIterFunc(key string) KeyIterator[string] {
+func buildKeyIter(key string) KeyIterator[string] {
 	var keys []Key[string]
 	if strings.TrimSpace(key) != "" {
 		if strings.ContainsAny(key, keySeparators) {
@@ -333,6 +332,8 @@ func buildKeyIterFunc(key string) KeyIterator[string] {
 	return newKeyIter(keys...)
 }
 
-func hello() {
-	print("hello")
+func buildHandle(key string) func() {
+	return func() {
+		println(key)
+	}
 }

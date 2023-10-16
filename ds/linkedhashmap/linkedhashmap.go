@@ -11,7 +11,7 @@ type (
 	Map[K comparable, V any] struct {
 		index *list.List
 		dict  map[K]V
-		mutex sync.RWMutex
+		sync.RWMutex
 	}
 	MapIterator[K comparable, V any] struct {
 		cursor  int
@@ -68,21 +68,21 @@ func NewFromMap[K comparable, V any](m map[K]V) (lm *Map[K, V]) {
 }
 
 func (m *Map[K, V]) len() int {
-	m.mutex.RLock()
-	defer m.mutex.RUnlock()
+	m.RLock()
+	defer m.RUnlock()
 	return m.index.Len()
 }
 
 func (m *Map[K, V]) clear() {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	m.Lock()
+	defer m.Unlock()
 	m.index.Init()
 	clear(m.dict)
 }
 
 func (m *Map[K, V]) Put(key K, value V) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	m.Lock()
+	defer m.Unlock()
 	if _, ok := m.dict[key]; !ok {
 		m.index.PushBack(key)
 	}
@@ -90,15 +90,15 @@ func (m *Map[K, V]) Put(key K, value V) {
 }
 
 func (m *Map[K, V]) Get(key K) (value V, ok bool) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	m.Lock()
+	defer m.Unlock()
 	value, ok = m.dict[key]
 	return
 }
 
 func (m *Map[K, V]) Remove(key K) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	m.Lock()
+	defer m.Unlock()
 	if _, ok := m.dict[key]; ok {
 		for e := m.index.Front(); e != nil; e = e.Next() {
 			k := e.Value.(K)
@@ -126,11 +126,12 @@ func (m *Map[K, V]) Values() (values []V) {
 }
 
 func (m *Map[K, V]) String() string {
-	str := "LinkedHashMap["
+	var sb strings.Builder
+	sb.WriteString("LinkedHashMap[")
 	for e := m.index.Front(); e != nil; e = e.Next() {
-		str += fmt.Sprintf("%v:%v ", e.Value, m.dict[e.Value.(K)])
+		sb.WriteString(fmt.Sprintf("%v:%v ", e.Value, m.dict[e.Value.(K)]))
 	}
-	return strings.TrimRight(str, " ") + "]"
+	return strings.TrimRight(sb.String(), " ") + "]"
 }
 
 func (m *Map[K, V]) Contains(k K) (ok bool) {

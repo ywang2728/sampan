@@ -1,12 +1,15 @@
 package radix
 
 import (
+	"container/list"
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/ywang2728/sampan/ds/linkedhashmap"
 	"regexp"
 	"testing"
 )
+
+var a list.List
 
 func TestNewKeySeparator(t *testing.T) {
 	tcs := []struct {
@@ -219,7 +222,7 @@ func TestBuildKeyIterFunc(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		ki := buildKeyIterFunc(tc.key)
+		ki := buildKeyIter(tc.key)
 		assert.NotNil(t, ki)
 		for _, k := range tc.keys {
 			assert.True(t, ki.hasNext())
@@ -237,15 +240,15 @@ func TestStringKey(t *testing.T) {
 		tailKey  KeyIterator[string]
 		tailPath KeyIterator[string]
 	}{
-		{value: "/", path: "/abc", common: buildKeyIterFunc("/"), tailKey: nil, tailPath: buildKeyIterFunc("abc")},
-		{value: "/abc", path: "/", common: buildKeyIterFunc("/"), tailKey: buildKeyIterFunc("abc"), tailPath: nil},
-		{value: "/abc", path: "/ab", common: buildKeyIterFunc("/ab"), tailKey: buildKeyIterFunc("c"), tailPath: nil},
-		{value: "/123", path: "/123abc", common: buildKeyIterFunc("/123"), tailKey: nil, tailPath: buildKeyIterFunc("abc")},
-		{value: "/123/", path: "/123/abc", common: buildKeyIterFunc("/123/"), tailKey: nil, tailPath: buildKeyIterFunc("abc")},
-		{value: "123/", path: "/123/abc", common: nil, tailKey: buildKeyIterFunc("123/"), tailPath: buildKeyIterFunc("/123/abc")},
-		{value: "123", path: "/123/abc", common: nil, tailKey: buildKeyIterFunc("123"), tailPath: buildKeyIterFunc("/123/abc")},
-		{value: "123abc", path: "123/abc", common: buildKeyIterFunc("123"), tailKey: buildKeyIterFunc("abc"), tailPath: buildKeyIterFunc("/abc")},
-		{value: "123/abc", path: "123/", common: buildKeyIterFunc("123/"), tailKey: buildKeyIterFunc("abc"), tailPath: nil},
+		{value: "/", path: "/abc", common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter("abc")},
+		{value: "/abc", path: "/", common: buildKeyIter("/"), tailKey: buildKeyIter("abc"), tailPath: nil},
+		{value: "/abc", path: "/ab", common: buildKeyIter("/ab"), tailKey: buildKeyIter("c"), tailPath: nil},
+		{value: "/123", path: "/123abc", common: buildKeyIter("/123"), tailKey: nil, tailPath: buildKeyIter("abc")},
+		{value: "/123/", path: "/123/abc", common: buildKeyIter("/123/"), tailKey: nil, tailPath: buildKeyIter("abc")},
+		{value: "123/", path: "/123/abc", common: nil, tailKey: buildKeyIter("123/"), tailPath: buildKeyIter("/123/abc")},
+		{value: "123", path: "/123/abc", common: nil, tailKey: buildKeyIter("123"), tailPath: buildKeyIter("/123/abc")},
+		{value: "123abc", path: "123/abc", common: buildKeyIter("123"), tailKey: buildKeyIter("abc"), tailPath: buildKeyIter("/abc")},
+		{value: "123/abc", path: "123/", common: buildKeyIter("123/"), tailKey: buildKeyIter("abc"), tailPath: nil},
 	}
 	for _, tc := range tcs {
 		var sk Key[string] = &staticKey{value: tc.value}
@@ -271,15 +274,15 @@ func TestStringKey(t *testing.T) {
 }
 
 func TestNewRadix(t *testing.T) {
-	r := New[string, func()](buildKeyIterFunc)
+	r := New[string, func()](buildKeyIter)
 	assert.Empty(t, r.root)
 	assert.Empty(t, r.size)
-	assert.NotNil(t, r.buildKeyIter)
+	assert.NotNil(t, r.buildKeyIterator)
 }
 
 func TestNewNode(t *testing.T) {
-	r := New[string, func()](buildKeyIterFunc)
-	ki := r.buildKeyIter("aaa")
+	r := New[string, func()](buildKeyIter)
+	ki := r.buildKeyIterator("aaa")
 	n := r.newNode(ki.Next())
 	assert.NotNil(t, n.k)
 	assert.Nil(t, n.v)
@@ -287,9 +290,30 @@ func TestNewNode(t *testing.T) {
 }
 
 func TestPutRecWithStringKeySingleNode(t *testing.T) {
-	r := New[string, func()](buildKeyIterFunc)
-	assert.True(t, r.put("/aaa", hello))
+	r := New[string, func()](buildKeyIter)
+	assert.True(t, r.put("/aaa", buildHandle("/aaa")))
 	assert.NotNil(t, r.root)
 	assert.Equal(t, 1, r.Len())
 	assert.Equal(t, "/aaa", fmt.Sprint(r.root.k))
+}
+
+func TestPutRecWithStringKeys(t *testing.T) {
+	tcs := []struct {
+		keyValueMap map[string]func()
+		dfs         []string
+	}{
+		{
+			keyValueMap: map[string]func(){"/abc/def/": buildHandle("def"), "/abc/123": buildHandle("123")},
+			dfs:         []string{"/abc/", "def/", "123"},
+		},
+	}
+	var r *Radix[string, func()]
+	for _, tc := range tcs {
+		r = &Radix[string, func()]{buildKeyIterator: buildKeyIter}
+		for k, v := range tc.keyValueMap {
+			r.put(k, v)
+		}
+	}
+	println(r.String())
+
 }

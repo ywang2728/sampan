@@ -12,10 +12,10 @@ type (
 	}
 
 	Cache[K comparable, V any] struct {
-		cap   int
-		list  *list.List
-		dict  map[K]*list.Element
-		mutex sync.RWMutex
+		cap  int
+		list *list.List
+		dict map[K]*list.Element
+		sync.RWMutex
 	}
 )
 
@@ -28,21 +28,21 @@ func New[K comparable, V any](cap int) *Cache[K, V] {
 }
 
 func (c *Cache[K, V]) len() int {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+	c.RLock()
+	defer c.RUnlock()
 	return c.list.Len()
 }
 
 func (c *Cache[K, V]) clear() {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.Lock()
+	defer c.Unlock()
 	c.list.Init()
 	clear(c.dict)
 }
 
 func (c *Cache[K, V]) put(key K, value V) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.Lock()
+	defer c.Unlock()
 	if e, ok := c.dict[key]; ok {
 		c.list.MoveToFront(e)
 	} else {
@@ -54,8 +54,8 @@ func (c *Cache[K, V]) put(key K, value V) {
 }
 
 func (c *Cache[K, V]) get(key K) (value V, ok bool) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.Lock()
+	defer c.Unlock()
 	if e, exist := c.dict[key]; exist {
 		c.list.MoveToFront(e)
 		value = e.Value.(*element[K, V]).value
@@ -65,8 +65,8 @@ func (c *Cache[K, V]) get(key K) (value V, ok bool) {
 }
 
 func (c *Cache[K, V]) delete(key K) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.Lock()
+	defer c.Unlock()
 	if e, ok := c.dict[key]; ok {
 		delete(c.dict, c.list.Remove(e).(*element[K, V]).key)
 	}

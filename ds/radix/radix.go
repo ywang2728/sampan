@@ -31,14 +31,18 @@ type (
 		size int
 		root *node[K, V]
 		// Func to build Key Iterator, the Key struct could be String, Wildcard, or Regex.
-		buildKeyIter func(K) KeyIterator[K]
-		mutex        sync.RWMutex
+		buildKeyIterator func(K) KeyIterator[K]
+		sync.RWMutex
 	}
 )
 
-func New[K comparable, V any](keyIterFunc func(K) KeyIterator[K]) *Radix[K, V] {
+func (n *node[K, V]) String() string {
+	return fmt.Sprintf("&{k:%+v, v:%+v, nodes: %+v", n.k, n.v, n.nodes)
+}
+
+func New[K comparable, V any](buildKeyIterFunc func(K) KeyIterator[K]) *Radix[K, V] {
 	return &Radix[K, V]{
-		buildKeyIter: keyIterFunc,
+		buildKeyIterator: buildKeyIterFunc,
 	}
 }
 
@@ -52,8 +56,8 @@ func (r *Radix[K, V]) newNode(k Key[K]) (n *node[K, V]) {
 
 func (r *Radix[K, V]) Clear() {
 	if r != nil {
-		r.mutex.Lock()
-		defer r.mutex.Unlock()
+		r.Lock()
+		defer r.Unlock()
 		r.root = nil
 		r.size = 0
 	}
@@ -63,8 +67,8 @@ func (r *Radix[K, V]) Len() int {
 	if r == nil {
 		return 0
 	}
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
+	r.RLock()
+	defer r.RUnlock()
 	if r.root == nil {
 		return 0
 	}
@@ -85,9 +89,9 @@ func (r *Radix[K, V]) String() string {
 }
 
 func (r *Radix[K, V]) put(k K, v V) (b bool) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	if nr := r.putRec(r.root, r.buildKeyIter(k), &v); nr != nil {
+	r.Lock()
+	defer r.Unlock()
+	if nr := r.putRec(r.root, r.buildKeyIterator(k), &v); nr != nil {
 		r.root = nr
 		r.size++
 		b = true
