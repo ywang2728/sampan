@@ -1,15 +1,28 @@
 package radix
 
 import (
-	"container/list"
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/ywang2728/sampan/ds/linkedhashmap"
+	"github.com/ywang2728/sampan/ds/stack"
 	"regexp"
 	"testing"
 )
 
-var a list.List
+func depthFirst(r *Radix[string, func()]) (df []string) {
+	s := stack.New[node[string, func()]]()
+	s.Push(*r.root)
+	for !s.IsEmpty() {
+		n, ok := s.Pop()
+		df = append(df, n.k.Value())
+		if ok && len(n.nodes) > 0 {
+			for i := len(n.nodes) - 1; i >= 0; i-- {
+				s.Push(*n.nodes[i])
+			}
+		}
+	}
+	return
+}
 
 func TestNewKeySeparator(t *testing.T) {
 	tcs := []struct {
@@ -309,10 +322,13 @@ func TestPutRecWithStringKeys(t *testing.T) {
 	}
 	var r *Radix[string, func()]
 	for _, tc := range tcs {
-		r = &Radix[string, func()]{buildKeyIterator: buildKeyIter}
+		r = New[string, func()](buildKeyIter)
 		for k, v := range tc.keyValueMap {
 			r.put(k, v)
 		}
+		fmt.Println(r)
+		result := depthFirst(r)
+		assert.EqualValues(t, tc.dfs, result)
 	}
 	println(r.String())
 
