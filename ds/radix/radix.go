@@ -19,6 +19,7 @@ type (
 	KeyIterator[K comparable] interface {
 		hasNext() bool
 		Next() Key[K]
+		Peek() Key[K]
 	}
 
 	node[K comparable, V any] struct {
@@ -122,16 +123,18 @@ func (r *Radix[K, V]) putRec(n *node[K, V], keyIter KeyIterator[K], value *V) (n
 			}
 			if tp != nil && tp.hasNext() {
 				var tpn *node[K, V]
-				for _, child := range n.nodes {
-					if cc, _, _, _ := child.k.Match(tp.Next().Value()); cc != nil && cc.hasNext() {
-						tpn = r.putRec(child, tp, value)
+				tpk := tp.Peek().Value()
+				for i := 0; i < len(n.nodes); i++ {
+					if cc, _, _, _ := n.nodes[i].k.Match(tpk); cc != nil && cc.hasNext() {
+						tpn = r.putRec(n.nodes[i], tp, value)
+						n.nodes[i] = tpn
 						break
 					}
 				}
 				if tpn == nil {
 					tpn = r.putRec(nil, tp, value)
+					nn.nodes = append(nn.nodes, tpn)
 				}
-				nn.nodes = append(nn.nodes, tpn)
 			} else if nn.v == nil {
 				nn.v = value
 			} else {

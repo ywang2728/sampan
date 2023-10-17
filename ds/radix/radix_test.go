@@ -1,12 +1,18 @@
 package radix
 
 import (
-	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/ywang2728/sampan/ds/linkedhashmap"
 	"github.com/ywang2728/sampan/ds/stack"
 	"regexp"
 	"testing"
+)
+
+type (
+	testNode struct {
+		key   string
+		value func()
+	}
 )
 
 func depthFirst(r *Radix[string, func()]) (df []string) {
@@ -21,6 +27,17 @@ func depthFirst(r *Radix[string, func()]) (df []string) {
 			}
 		}
 	}
+	return
+}
+
+func buildHandle(key string) func() {
+	return func() {
+		println(key)
+	}
+}
+
+func newTN(k string) (tn *testNode) {
+	tn = &testNode{key: k, value: buildHandle(k)}
 	return
 }
 
@@ -247,25 +264,25 @@ func TestBuildKeyIterFunc(t *testing.T) {
 
 func TestStringKey(t *testing.T) {
 	tcs := []struct {
-		value    string
+		key      string
 		path     string
 		common   KeyIterator[string]
 		tailKey  KeyIterator[string]
 		tailPath KeyIterator[string]
 	}{
-		{value: "/", path: "/abc", common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter("abc")},
-		{value: "/abc", path: "/", common: buildKeyIter("/"), tailKey: buildKeyIter("abc"), tailPath: nil},
-		{value: "/abc", path: "/ab", common: buildKeyIter("/ab"), tailKey: buildKeyIter("c"), tailPath: nil},
-		{value: "/123", path: "/123abc", common: buildKeyIter("/123"), tailKey: nil, tailPath: buildKeyIter("abc")},
-		{value: "/123/", path: "/123/abc", common: buildKeyIter("/123/"), tailKey: nil, tailPath: buildKeyIter("abc")},
-		{value: "123/", path: "/123/abc", common: nil, tailKey: buildKeyIter("123/"), tailPath: buildKeyIter("/123/abc")},
-		{value: "123", path: "/123/abc", common: nil, tailKey: buildKeyIter("123"), tailPath: buildKeyIter("/123/abc")},
-		{value: "123abc", path: "123/abc", common: buildKeyIter("123"), tailKey: buildKeyIter("abc"), tailPath: buildKeyIter("/abc")},
-		{value: "123/abc", path: "123/", common: buildKeyIter("123/"), tailKey: buildKeyIter("abc"), tailPath: nil},
+		{key: "/", path: "/abc", common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter("abc")},
+		{key: "/abc", path: "/", common: buildKeyIter("/"), tailKey: buildKeyIter("abc"), tailPath: nil},
+		{key: "/abc", path: "/ab", common: buildKeyIter("/ab"), tailKey: buildKeyIter("c"), tailPath: nil},
+		{key: "/123", path: "/123abc", common: buildKeyIter("/123"), tailKey: nil, tailPath: buildKeyIter("abc")},
+		{key: "/123/", path: "/123/abc", common: buildKeyIter("/123/"), tailKey: nil, tailPath: buildKeyIter("abc")},
+		{key: "123/", path: "/123/abc", common: nil, tailKey: buildKeyIter("123/"), tailPath: buildKeyIter("/123/abc")},
+		{key: "123", path: "/123/abc", common: nil, tailKey: buildKeyIter("123"), tailPath: buildKeyIter("/123/abc")},
+		{key: "123abc", path: "123/abc", common: buildKeyIter("123"), tailKey: buildKeyIter("abc"), tailPath: buildKeyIter("/abc")},
+		{key: "123/abc", path: "123/", common: buildKeyIter("123/"), tailKey: buildKeyIter("abc"), tailPath: nil},
 	}
 	for _, tc := range tcs {
-		var sk Key[string] = &staticKey{value: tc.value}
-		assert.Equal(t, tc.value, fmt.Sprint(sk))
+		var sk Key[string] = &staticKey{value: tc.key}
+		assert.Equal(t, tc.key, sk.Value())
 		c, tk, tp, _ := sk.Match(tc.path)
 		if tc.common == nil {
 			assert.Nil(t, c)
@@ -307,29 +324,65 @@ func TestPutRecWithStringKeySingleNode(t *testing.T) {
 	assert.True(t, r.put("/aaa", buildHandle("/aaa")))
 	assert.NotNil(t, r.root)
 	assert.Equal(t, 1, r.Len())
-	assert.Equal(t, "/aaa", fmt.Sprint(r.root.k))
+	assert.Equal(t, "/aaa", r.root.k.Value())
 }
 
-func TestPutRecWithStringKeys(t *testing.T) {
+func TestPutRecWithStaticKeys(t *testing.T) {
 	tcs := []struct {
-		keyValueMap map[string]func()
-		dfs         []string
+		ns  []*testNode
+		dfs []string
 	}{
-		{
-			keyValueMap: map[string]func(){"/abc/def/": buildHandle("def"), "/abc/123": buildHandle("123")},
-			dfs:         []string{"/abc/", "def/", "123"},
-		},
+		{[]*testNode{newTN("/")}, []string{"/"}},
+		{[]*testNode{newTN("/"), newTN("/abc")}, []string{"/", "abc"}},
+		{[]*testNode{newTN("/"), newTN("/abc"), newTN("/abc/123")}, []string{"/", "abc", "/123"}},
+		{[]*testNode{newTN("/abc"), newTN("/abc/123")}, []string{"/abc", "/123"}},
+		{[]*testNode{newTN("/abc/def/"), newTN("/abc/123")}, []string{"/abc/", "def/", "123"}},
+		{[]*testNode{newTN("/abc/def/"), newTN("/abc")}, []string{"/abc", "/def/"}},
+		{[]*testNode{newTN("/abc/def/"), newTN("/")}, []string{"/", "abc/def/"}},
+		{[]*testNode{newTN("/abc/def/"), newTN("/"), newTN("/123")}, []string{"/", "abc/def/", "123"}},
+		{[]*testNode{newTN("/abc/def/"), newTN("/"), newTN("/abc")}, []string{"/", "abc", "/def/"}},
+		{[]*testNode{newTN("/abc/def/"), newTN("/"), newTN("/abc"), newTN("/abc/123")}, []string{"/", "abc", "/", "def/", "123"}},
+		{[]*testNode{newTN("/abc/def/hij"), newTN("/"), newTN("/abc"), newTN("/abc/def")}, []string{"/", "abc", "/def", "/hij"}},
+		{[]*testNode{newTN("/abc/def/hij"), newTN("/"), newTN("/abc"), newTN("/abc/def"), newTN("/abc/def/hij/123/")}, []string{"/", "abc", "/def", "/hij", "/123/"}},
+		{[]*testNode{newTN("/abc/def/hij"), newTN("/"), newTN("/abc"), newTN("/abc/def"), newTN("/abc/def/hij/123/"), newTN("/abc/def/hij/567")}, []string{"/", "abc", "/def", "/hij", "/", "123/", "567"}},
 	}
 	var r *Radix[string, func()]
 	for _, tc := range tcs {
 		r = New[string, func()](buildKeyIter)
-		for k, v := range tc.keyValueMap {
-			r.put(k, v)
+		for _, i := range tc.ns {
+			r.put(i.key, i.value)
 		}
-		fmt.Println(r)
 		result := depthFirst(r)
 		assert.EqualValues(t, tc.dfs, result)
 	}
-	println(r.String())
+}
 
+func TestPutRecWithWildcardStar(t *testing.T) {
+	tcs := []struct {
+		ns  []*testNode
+		dfs []string
+	}{
+		{[]*testNode{newTN("/")}, []string{"/"}},
+		{[]*testNode{newTN("/"), newTN("/abc")}, []string{"/", "abc"}},
+		{[]*testNode{newTN("/"), newTN("/abc"), newTN("/abc/123")}, []string{"/", "abc", "/123"}},
+		{[]*testNode{newTN("/abc"), newTN("/abc/123")}, []string{"/abc", "/123"}},
+		{[]*testNode{newTN("/abc/def/"), newTN("/abc/123")}, []string{"/abc/", "def/", "123"}},
+		{[]*testNode{newTN("/abc/def/"), newTN("/abc")}, []string{"/abc", "/def/"}},
+		{[]*testNode{newTN("/abc/def/"), newTN("/")}, []string{"/", "abc/def/"}},
+		{[]*testNode{newTN("/abc/def/"), newTN("/"), newTN("/123")}, []string{"/", "abc/def/", "123"}},
+		{[]*testNode{newTN("/abc/def/"), newTN("/"), newTN("/abc")}, []string{"/", "abc", "/def/"}},
+		{[]*testNode{newTN("/abc/def/"), newTN("/"), newTN("/abc"), newTN("/abc/123")}, []string{"/", "abc", "/", "def/", "123"}},
+		{[]*testNode{newTN("/abc/def/hij"), newTN("/"), newTN("/abc"), newTN("/abc/def")}, []string{"/", "abc", "/def", "/hij"}},
+		{[]*testNode{newTN("/abc/def/hij"), newTN("/"), newTN("/abc"), newTN("/abc/def"), newTN("/abc/def/hij/123/")}, []string{"/", "abc", "/def", "/hij", "/123/"}},
+		{[]*testNode{newTN("/abc/def/hij"), newTN("/"), newTN("/abc"), newTN("/abc/def"), newTN("/abc/def/hij/123/"), newTN("/abc/def/hij/567")}, []string{"/", "abc", "/def", "/hij", "/", "123/", "567"}},
+	}
+	var r *Radix[string, func()]
+	for _, tc := range tcs {
+		r = New[string, func()](buildKeyIter)
+		for _, i := range tc.ns {
+			r.put(i.key, i.value)
+		}
+		result := depthFirst(r)
+		assert.EqualValues(t, tc.dfs, result)
+	}
 }

@@ -106,12 +106,18 @@ func newKeyIter(keys ...Key[string]) KeyIterator[string] {
 
 func (ki *keyIter) hasNext() bool {
 	return ki.cursor+1 < len(ki.keys)
-
 }
 func (ki *keyIter) Next() Key[string] {
 	if ki.hasNext() {
 		ki.cursor++
 		return ki.keys[ki.cursor]
+	}
+	return nil
+}
+
+func (ki *keyIter) Peek() Key[string] {
+	if ki.hasNext() {
+		return ki.keys[ki.cursor+1]
 	}
 	return nil
 }
@@ -330,10 +336,4 @@ func buildKeyIter(key string) KeyIterator[string] {
 		}
 	}
 	return newKeyIter(keys...)
-}
-
-func buildHandle(key string) func() {
-	return func() {
-		println(key)
-	}
 }
