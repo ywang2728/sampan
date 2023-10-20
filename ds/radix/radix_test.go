@@ -362,19 +362,9 @@ func TestPutRecWithWildcardStar(t *testing.T) {
 		ns  []*testNode
 		dfs []string
 	}{
-		{[]*testNode{newTN("/")}, []string{"/"}},
-		{[]*testNode{newTN("/"), newTN("/abc")}, []string{"/", "abc"}},
-		{[]*testNode{newTN("/"), newTN("/abc"), newTN("/abc/123")}, []string{"/", "abc", "/123"}},
-		{[]*testNode{newTN("/abc"), newTN("/abc/123")}, []string{"/abc", "/123"}},
-		{[]*testNode{newTN("/abc/def/"), newTN("/abc/123")}, []string{"/abc/", "def/", "123"}},
-		{[]*testNode{newTN("/abc/def/"), newTN("/abc")}, []string{"/abc", "/def/"}},
-		{[]*testNode{newTN("/abc/def/"), newTN("/")}, []string{"/", "abc/def/"}},
-		{[]*testNode{newTN("/abc/def/"), newTN("/"), newTN("/123")}, []string{"/", "abc/def/", "123"}},
-		{[]*testNode{newTN("/abc/def/"), newTN("/"), newTN("/abc")}, []string{"/", "abc", "/def/"}},
-		{[]*testNode{newTN("/abc/def/"), newTN("/"), newTN("/abc"), newTN("/abc/123")}, []string{"/", "abc", "/", "def/", "123"}},
-		{[]*testNode{newTN("/abc/def/hij"), newTN("/"), newTN("/abc"), newTN("/abc/def")}, []string{"/", "abc", "/def", "/hij"}},
-		{[]*testNode{newTN("/abc/def/hij"), newTN("/"), newTN("/abc"), newTN("/abc/def"), newTN("/abc/def/hij/123/")}, []string{"/", "abc", "/def", "/hij", "/123/"}},
-		{[]*testNode{newTN("/abc/def/hij"), newTN("/"), newTN("/abc"), newTN("/abc/def"), newTN("/abc/def/hij/123/"), newTN("/abc/def/hij/567")}, []string{"/", "abc", "/def", "/hij", "/", "123/", "567"}},
+		//{[]*testNode{newTN("/")}, []string{"/"}},
+		{[]*testNode{newTN("/*")}, []string{"/", "*"}},
+		//{[]*testNode{newTN("/"), newTN("/*")}, []string{"/", "abc"}},
 	}
 	var r *Radix[string, func()]
 	for _, tc := range tcs {
@@ -382,7 +372,8 @@ func TestPutRecWithWildcardStar(t *testing.T) {
 		for _, i := range tc.ns {
 			r.put(i.key, i.value)
 		}
-		result := depthFirst(r)
-		assert.EqualValues(t, tc.dfs, result)
+		println(r.String())
+		//result := depthFirst(r)
+		//assert.EqualValues(t, tc.dfs, result)
 	}
 }

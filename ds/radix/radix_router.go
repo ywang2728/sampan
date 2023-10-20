@@ -127,14 +127,13 @@ func (ki *keyIter) Peek() Key[string] {
 
 func (sk *staticKey) Match(k Key[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], p *map[string]string) {
 	if kk, ok := k.(*staticKey); ok {
-		kkv := kk.Value()
-		i, ln, lp := 0, len(sk.value), len(kkv)
+		i, ln, lp := 0, len(sk.value), len(kk.value)
 		m := ln
 		if m > lp {
 			m = lp
 		}
 		for ; i < m; i++ {
-			if sk.value[i] != kkv[i] {
+			if sk.value[i] != kk.value[i] {
 				break
 			}
 		}
@@ -145,7 +144,7 @@ func (sk *staticKey) Match(k Key[string]) (c KeyIterator[string], tn KeyIterator
 			tn = buildKeyIter(sk.value[i:])
 		}
 		if i < lp {
-			tp = buildKeyIter(kkv[i:])
+			tp = buildKeyIter(kk.value[i:])
 		}
 	} else {
 		tp = newKeyIter(k)
@@ -162,12 +161,26 @@ func (sk *staticKey) Value() string {
 }
 
 func (wsk *wildcardStarKey) Match(k Key[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], p *map[string]string) {
-	//if strings.HasPrefix(k, wsk.prefix) && strings.HasSuffix(k, wsk.suffix) {
-	//	c = buildKeyIter(k)
-	//	wsk.params[wildcardStar] = strings.TrimPrefix(strings.TrimSuffix(k, wsk.suffix), wsk.prefix)
-	//} else {
-	//	tp = buildKeyIter(k)
-	//}
+	if kk, ok := k.(*staticKey); ok {
+		if strings.HasPrefix(wsk.prefix, kk.value) && strings.HasSuffix(wsk.suffix, kk.value) {
+			c = newKeyIter(wsk)
+			(*p)["*"] = strings.TrimPrefix(strings.TrimSuffix(kk.value, wsk.suffix), wsk.prefix)
+		} else {
+			tp = newKeyIter(k)
+		}
+	} else if kk, ok := k.(*wildcardStarKey); ok {
+		if strings.HasPrefix(wsk.prefix, kk.prefix) && strings.HasSuffix(wsk.suffix, kk.suffix) {
+			c = newKeyIter(wsk)
+			(*p)["*"] = kk.value
+		} else {
+			tp = newKeyIter(k)
+		}
+	} else {
+		if wsk.prefix == "" && wsk.suffix == "" {
+			c = newKeyIter(wsk)
+			(*p)["*"] = kk.Value()
+		}
+	}
 	return
 }
 
@@ -180,9 +193,13 @@ func (wsk *wildcardStarKey) Value() string {
 }
 
 func (wck *wildcardColonKey) Match(k Key[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], p *map[string]string) {
-	//suf, _ := strings.CutPrefix(k, wildcardColon)
-	//wck.params[suf] = k
-	//c = buildKeyIter(k)
+	if kk, ok := k.(*wildcardStarKey); ok {
+		c = newKeyIter(wck)
+		(*p)[wck.value[1:]] = kk.prefix + kk.value + kk.suffix
+	} else {
+		c = newKeyIter(wck)
+		(*p)[wck.value[1:]] = kk.value
+	}
 	return
 }
 
@@ -195,7 +212,22 @@ func (wck *wildcardColonKey) Value() string {
 }
 
 func (rk *regexKey) Match(k Key[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], p *map[string]string) {
-	fmt.Println(k)
+	if kk, ok := k.(*staticKey); ok {
+		isMarched := true
+		for i, kkv := 0, kk.value; i < len(rk.value) && isMarched; i++ {
+			if compiled, ok := rk.patterns.Get(rk.value[i]); ok {
+				isMarched = compiled.MatchString(kkv)
+			} else {
+				kkv, isMarched = strings.CutPrefix(kkv, rk.value[i])
+			}
+		}
+		if isMarched {
+			c = newKeyIter(rk)
+			//TODO parse regex group values to Params
+		}
+	} else {
+		tp = newKeyIter(k)
+	}
 	return
 }
 
