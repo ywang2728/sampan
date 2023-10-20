@@ -13,11 +13,12 @@ type (
 		fmt.Stringer
 		Value() K
 		// Match the current key with input key, return common prefix, and tails of current key and input key.
-		Match(K) (KeyIterator[K], KeyIterator[K], KeyIterator[K], *map[K]K)
+		Match(Key[K]) (KeyIterator[K], KeyIterator[K], KeyIterator[K], *map[K]K)
 	}
 
 	KeyIterator[K comparable] interface {
-		hasNext() bool
+		Len() int
+		HasNext() bool
 		Next() Key[K]
 		Peek() Key[K]
 	}
@@ -101,19 +102,19 @@ func (r *Radix[K, V]) put(k K, v V) (b bool) {
 }
 
 func (r *Radix[K, V]) putRec(n *node[K, V], keyIter KeyIterator[K], value *V) (nn *node[K, V]) {
-	if keyIter.hasNext() {
+	if keyIter.HasNext() {
 		key := keyIter.Next()
 		if n == nil {
 			nn = r.newNode(key)
-			if keyIter.hasNext() {
+			if keyIter.HasNext() {
 				nn = r.putRec(nn, keyIter, value)
 			} else {
 				nn.v = value
 			}
 		} else {
-			c, tn, tp, _ := n.k.Match(key.Value())
-			if c != nil && c.hasNext() {
-				if tn != nil && tn.hasNext() {
+			c, tn, tp, _ := n.k.Match(key)
+			if c != nil && c.HasNext() {
+				if tn != nil && tn.HasNext() {
 					nn = r.putRec(nil, c, nil)
 					n.k = tn.Next()
 					nn.nodes = append(nn.nodes, n)
@@ -121,11 +122,11 @@ func (r *Radix[K, V]) putRec(n *node[K, V], keyIter KeyIterator[K], value *V) (n
 					nn = n
 				}
 			}
-			if tp != nil && tp.hasNext() {
+			if tp != nil && tp.HasNext() {
 				var tpn *node[K, V]
-				tpk := tp.Peek().Value()
+				tpk := tp.Peek()
 				for i := 0; i < len(n.nodes); i++ {
-					if cc, _, _, _ := n.nodes[i].k.Match(tpk); cc != nil && cc.hasNext() {
+					if cc, _, _, _ := n.nodes[i].k.Match(tpk); cc != nil && cc.HasNext() {
 						tpn = r.putRec(n.nodes[i], tp, value)
 						n.nodes[i] = tpn
 						break

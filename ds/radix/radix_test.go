@@ -165,10 +165,10 @@ func TestKeyIter(t *testing.T) {
 		ki := newKeyIter(tc.keys...)
 		assert.NotNil(t, ki)
 		for _, k := range tc.keys {
-			assert.True(t, ki.hasNext())
+			assert.True(t, ki.HasNext())
 			assert.Equal(t, k, ki.Next())
 		}
-		assert.False(t, ki.hasNext())
+		assert.False(t, ki.HasNext())
 	}
 }
 
@@ -232,18 +232,18 @@ func TestBuildKeyIterFunc(t *testing.T) {
 		{key: "/123{abc}789{def}/", keys: []Key[string]{&staticKey{"/"}, &regexKey{value: []string{"123", "{abc}", "789", "{def}"}, patterns: compileRePattern("{abc}", "{def}"), params: map[string]string{}}, &staticKey{"/"}}},
 		{key: "toto/123{abc}789{def}", keys: []Key[string]{&staticKey{"toto/"}, &regexKey{value: []string{"123", "{abc}", "789", "{def}"}, patterns: compileRePattern("{abc}", "{def}"), params: map[string]string{}}}},
 		{key: "/toto/123{abc}789{def}", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123", "{abc}", "789", "{def}"}, patterns: compileRePattern("{abc}", "{def}"), params: map[string]string{}}}},
-		{key: "/toto/123{abc}789{def}/hoho/", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123", "{abc}", "789", "{def}"}, patterns: compileRePattern("{abc}", "{def}"), params: map[string]string{}}, &staticKey{"/hoho/"}}},
+		{key: "/toto/123{abc}789{def}/hello/", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123", "{abc}", "789", "{def}"}, patterns: compileRePattern("{abc}", "{def}"), params: map[string]string{}}, &staticKey{"/hello/"}}},
 		{key: "{abc}/*", keys: []Key[string]{&regexKey{value: []string{"{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}}},
 		{key: ":xyz/{abc}/*", keys: []Key[string]{&wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/"}, &regexKey{value: []string{"{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}}},
 		{key: "/:xyz/{abc}/*", keys: []Key[string]{&staticKey{"/"}, &wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/"}, &regexKey{value: []string{"{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}}},
 		{key: "/:xyz/{abc}/*/", keys: []Key[string]{&staticKey{"/"}, &wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/"}, &regexKey{value: []string{"{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}, &staticKey{"/"}}},
 		{key: "/123{abc}/*", keys: []Key[string]{&staticKey{"/"}, &regexKey{value: []string{"123", "{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}}},
 		{key: "/123{abc}/*/", keys: []Key[string]{&staticKey{"/"}, &regexKey{value: []string{"123", "{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}, &staticKey{"/"}}},
-		{key: "/toto/123{abc}/*/hoho", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123", "{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}, &staticKey{"/hoho"}}},
-		{key: "/toto/123{abc}789/:xyz/hoho/", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123", "{abc}", "789"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/hoho/"}}},
-		{key: "/toto/123{abc}789/:xyz/hoho/pre*", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123", "{abc}", "789"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/hoho/"}, &wildcardStarKey{value: "*", prefix: "pre", params: map[string]string{"*": ""}}}},
-		{key: "/toto/123-{(?P<date>[a-z][0-9]?)}-789/:xyz/hoho/pre*/", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123-", "{(?P<date>[a-z][0-9]?)}", "-789"}, patterns: compileRePattern("{(?P<date>[a-z][0-9]?)}"), params: map[string]string{"date": ""}}, &staticKey{"/"}, &wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/hoho/"}, &wildcardStarKey{value: "*", prefix: "pre", params: map[string]string{"*": ""}}, &staticKey{"/"}}},
-		{key: "/toto/123-{(?P<date>[a-z][0-9]?)}-789-{\\w+}/:xyz/hoho/pre*/", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123-", "{(?P<date>[a-z][0-9]?)}", "-789-", "{\\w+}"}, patterns: compileRePattern("{(?P<date>[a-z][0-9]?)}", "{\\w+}"), params: map[string]string{"date": ""}}, &staticKey{"/"}, &wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/hoho/"}, &wildcardStarKey{value: "*", prefix: "pre", params: map[string]string{"*": ""}}, &staticKey{"/"}}},
+		{key: "/toto/123{abc}/*/hello", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123", "{abc}"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardStarKey{value: "*", params: map[string]string{"*": ""}}, &staticKey{"/hello"}}},
+		{key: "/toto/123{abc}789/:xyz/hello/", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123", "{abc}", "789"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/hello/"}}},
+		{key: "/toto/123{abc}789/:xyz/hello/pre*", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123", "{abc}", "789"}, patterns: compileRePattern("{abc}"), params: map[string]string{}}, &staticKey{"/"}, &wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/hello/"}, &wildcardStarKey{value: "*", prefix: "pre", params: map[string]string{"*": ""}}}},
+		{key: "/toto/123-{(?P<date>[a-z][0-9]?)}-789/:xyz/hello/pre*/", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123-", "{(?P<date>[a-z][0-9]?)}", "-789"}, patterns: compileRePattern("{(?P<date>[a-z][0-9]?)}"), params: map[string]string{"date": ""}}, &staticKey{"/"}, &wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/hello/"}, &wildcardStarKey{value: "*", prefix: "pre", params: map[string]string{"*": ""}}, &staticKey{"/"}}},
+		{key: "/toto/123-{(?P<date>[a-z][0-9]?)}-789-{\\w+}/:xyz/hello/pre*/", keys: []Key[string]{&staticKey{"/toto/"}, &regexKey{value: []string{"123-", "{(?P<date>[a-z][0-9]?)}", "-789-", "{\\w+}"}, patterns: compileRePattern("{(?P<date>[a-z][0-9]?)}", "{\\w+}"), params: map[string]string{"date": ""}}, &staticKey{"/"}, &wildcardColonKey{value: ":xyz", params: map[string]string{"xyz": ""}}, &staticKey{"/hello/"}, &wildcardStarKey{value: "*", prefix: "pre", params: map[string]string{"*": ""}}, &staticKey{"/"}}},
 		{key: "123{abc}789{\\w+}", keys: []Key[string]{&regexKey{value: []string{"123", "{abc}", "789", "{\\w+}"}, patterns: compileRePattern("{abc}", "{\\w+}"), params: map[string]string{}}}},
 		{key: "123{abc}{\\w+}", keys: []Key[string]{&regexKey{value: []string{"123", "{abc}", "{\\w+}"}, patterns: compileRePattern("{abc}", "{\\w+}"), params: map[string]string{}}}},
 		{key: "123{abc}789{(?P<date>[a-z][0-9]?)}", keys: []Key[string]{&regexKey{value: []string{"123", "{abc}", "789", "{(?P<date>[a-z][0-9]?)}"}, patterns: compileRePattern("{abc}", "{(?P<date>[a-z][0-9]?)}"), params: map[string]string{"date": ""}}}},
@@ -255,10 +255,10 @@ func TestBuildKeyIterFunc(t *testing.T) {
 		ki := buildKeyIter(tc.key)
 		assert.NotNil(t, ki)
 		for _, k := range tc.keys {
-			assert.True(t, ki.hasNext())
+			assert.True(t, ki.HasNext())
 			assert.Equal(t, k, ki.Next())
 		}
-		assert.False(t, ki.hasNext())
+		assert.False(t, ki.HasNext())
 	}
 }
 
@@ -283,7 +283,7 @@ func TestStringKey(t *testing.T) {
 	for _, tc := range tcs {
 		var sk Key[string] = &staticKey{value: tc.key}
 		assert.Equal(t, tc.key, sk.Value())
-		c, tk, tp, _ := sk.Match(tc.path)
+		c, tk, tp, _ := sk.Match(&staticKey{value: tc.path})
 		if tc.common == nil {
 			assert.Nil(t, c)
 		} else {
