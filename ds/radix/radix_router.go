@@ -23,28 +23,20 @@ type (
 	staticKey struct {
 		value string
 	}
-
 	wildcardStarKey struct {
 		value  string
 		prefix string
 		suffix string
 		params map[string]string
 	}
-
 	wildcardColonKey struct {
 		value  string
 		params map[string]string
 	}
-
 	regexKey struct {
 		value    []string
 		patterns *linkedhashmap.Map[string, *regexp.Regexp]
 		params   map[string]string
-	}
-
-	keyIter struct {
-		cursor int
-		keys   []Key[string]
 	}
 
 	keySeparator struct {
@@ -52,15 +44,169 @@ type (
 		es  string
 		cnt atomic.Int32
 	}
+	keyIter struct {
+		cursor int
+		keys   []Key[string]
+	}
 )
 
+// staticKey
+func (sk *staticKey) String() string {
+	return sk.value
+}
+func (sk *staticKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string]) {
+	if ki.HasNext() {
+		if kk, ok := ki.Next().(*staticKey); ok {
+			i, ln, lp := 0, len(sk.value), len(kk.value)
+			m := ln
+			if m > lp {
+				m = lp
+			}
+			for ; i < m; i++ {
+				if sk.value[i] != kk.value[i] {
+					break
+				}
+			}
+			if i > 0 {
+				c = newKeyIter(sk.value[:i])
+			}
+			if i < ln {
+				tn = newKeyIter(sk.value[i:])
+			}
+			var tpKeys []Key[string]
+			if ki.HasNext() {
+				if instKI, ok := ki.(*keyIter); ok {
+					if i == 0 {
+						tpKeys = append(tpKeys, instKI.keys[instKI.cursor:]...)
+					} else if i < lp {
+						if instKey, ok := instKI.keys[instKI.cursor+1].(*staticKey); ok {
+							instKey.value = kk.value[i:] + instKey.value
+						} else {
+							tpKeys = append(tpKeys, &staticKey{kk.value[i:]})
+						}
+						tpKeys = append(tpKeys, instKI.keys[instKI.cursor+1:]...)
+					} else if i == lp {
+						tpKeys = append(tpKeys, instKI.keys[instKI.cursor+1:]...)
+					}
+				}
+			} else if i < lp {
+				tpKeys = append(tpKeys, &staticKey{kk.value[i:]})
+			}
+			if len(tpKeys) > 0 {
+				tp = &keyIter{-1, tpKeys}
+			}
+		} else {
+			tp = ki
+		}
+	}
+	return
+}
+func (sk *staticKey) Match(s string) (t string, p map[string]string, matched bool) {
+	t, matched = strings.CutPrefix(s, sk.value)
+	return
+}
+
+// wildcardStarKey
+func (wsk *wildcardStarKey) String() string {
+	return wsk.prefix + wsk.value + wsk.suffix
+}
+func (wsk *wildcardStarKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string]) {
+	//if kk, ok := k.(*staticKey); ok {
+	//	if wsk.prefix == ""
+	//	if strings.HasPrefix(wsk.prefix, kk.value) && strings.HasSuffix(wsk.suffix, kk.value) {
+	//		c = newKeyIter(wsk)
+	//		(*p)["*"] = strings.TrimPrefix(strings.TrimSuffix(kk.value, wsk.suffix), wsk.prefix)
+	//	} else {
+	//		tp = newKeyIter(k)
+	//	}
+	//} else if kk, ok := k.(*wildcardStarKey); ok {
+	//	if strings.HasPrefix(wsk.prefix, kk.prefix) && strings.HasSuffix(wsk.suffix, kk.suffix) {
+	//		c = newKeyIter(wsk)
+	//		(*p)["*"] = kk.value
+	//	} else {
+	//		tp = newKeyIter(k)
+	//	}
+	//} else {
+	//	if wsk.prefix == "" && wsk.suffix == "" {
+	//		c = newKeyIter(wsk)
+	//		(*p)["*"] = kk.value
+	//	}
+	//}
+	return
+}
+func (wsk *wildcardStarKey) Match(s string) (t string, p map[string]string, matched bool) {
+	if t, matched = strings.CutPrefix(s, wsk.prefix); matched {
+		if i := strings.Index(s, wsk.suffix); i > -1 {
+			p[wildcardStar], t, matched = strings.Cut(t, wsk.suffix)
+		} else {
+			t = s
+		}
+	} else {
+		t = s
+	}
+	return
+}
+
+// wildcardColonKey
+func (wck *wildcardColonKey) String() string {
+	return wck.value
+}
+func (wck *wildcardColonKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string]) {
+	//if kk, ok := k.(*wildcardStarKey); ok {
+	//	c = newKeyIter(wck)
+	//	(*p)[wck.value[1:]] = kk.prefix + kk.value + kk.suffix
+	//} else {
+	//	c = newKeyIter(wck)
+	//	(*p)[wck.value[1:]] = kk.value
+	//}
+	return
+}
+func (wck *wildcardColonKey) Match(s string) (t string, p map[string]string, matched bool) {
+	if i := strings.Index(s, pathSeparator); i > 0 {
+		p[wck.value], t, matched = s[:i], s[i:], true
+	} else {
+		t = s
+	}
+	return
+}
+
+// regexKey
+func (rk *regexKey) String() string {
+	return fmt.Sprint(rk.value)
+}
+func (rk *regexKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string]) {
+	//if kk, ok := k.(*staticKey); ok {
+	//	marched := true
+	//	for i, kkv := 0, kk.value; i < len(rk.value) && marched; i++ {
+	//		if compiled, ok := rk.patterns.Get(rk.value[i]); ok {
+	//			marched = compiled.MatchString(kkv)
+	//		} else {
+	//			kkv, marched = strings.CutPrefix(kkv, rk.value[i])
+	//		}
+	//	}
+	//	if marched {
+	//		c = newKeyIter(rk)
+	//		//TODO parse regex group values to Params
+	//	}
+	//} else {
+	//	tp = newKeyIter(k)
+	//}
+	return
+}
+func (rk *regexKey) Match(s string) (t string, p map[string]string, matched bool) {
+	matched = true
+
+	return
+}
+
+// KeySeparator
 func newKeySeparator(begin string, end string) (ks *keySeparator) {
 	return &keySeparator{bs: begin, es: end, cnt: atomic.Int32{}}
 }
 func (ks *keySeparator) reset() {
 	ks.cnt.Store(0)
 }
-func (ks *keySeparator) isOpened() bool {
+func (ks *keySeparator) opened() bool {
 	return 0 != ks.cnt.Load()
 }
 func (ks *keySeparator) open() (times int, opened bool) {
@@ -93,154 +239,13 @@ func (ks *keySeparator) close() (times int, closed bool) {
 	times = int(ks.cnt.Load())
 	return
 }
-func (ks *keySeparator) isClosed() bool {
+func (ks *keySeparator) closed() bool {
 	return 0 == ks.cnt.Load()
 }
 
-func newKeyIter(keys ...Key[string]) KeyIterator[string] {
-	return &keyIter{
-		cursor: -1,
-		keys:   keys,
-	}
-}
-func (ki *keyIter) Len() int {
-	return len(ki.keys)
-}
-
-func (ki *keyIter) HasNext() bool {
-	return ki.cursor+1 < len(ki.keys)
-}
-func (ki *keyIter) Next() Key[string] {
-	if ki.HasNext() {
-		ki.cursor++
-		return ki.keys[ki.cursor]
-	}
-	return nil
-}
-
-func (ki *keyIter) Peek() Key[string] {
-	if ki.HasNext() {
-		return ki.keys[ki.cursor+1]
-	}
-	return nil
-}
-
-func (sk *staticKey) Match(k Key[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], p *map[string]string) {
-	if kk, ok := k.(*staticKey); ok {
-		i, ln, lp := 0, len(sk.value), len(kk.value)
-		m := ln
-		if m > lp {
-			m = lp
-		}
-		for ; i < m; i++ {
-			if sk.value[i] != kk.value[i] {
-				break
-			}
-		}
-		if i > 0 {
-			c = buildKeyIter(sk.value[:i])
-		}
-		if i < ln {
-			tn = buildKeyIter(sk.value[i:])
-		}
-		if i < lp {
-			tp = buildKeyIter(kk.value[i:])
-		}
-	} else {
-		tp = newKeyIter(k)
-	}
-	return
-}
-
-func (sk *staticKey) String() string {
-	return fmt.Sprintf("&{value:%+v}", sk.value)
-}
-
-func (sk *staticKey) Value() string {
-	return sk.value
-}
-
-func (wsk *wildcardStarKey) Match(k Key[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], p *map[string]string) {
-	if kk, ok := k.(*staticKey); ok {
-		if strings.HasPrefix(wsk.prefix, kk.value) && strings.HasSuffix(wsk.suffix, kk.value) {
-			c = newKeyIter(wsk)
-			(*p)["*"] = strings.TrimPrefix(strings.TrimSuffix(kk.value, wsk.suffix), wsk.prefix)
-		} else {
-			tp = newKeyIter(k)
-		}
-	} else if kk, ok := k.(*wildcardStarKey); ok {
-		if strings.HasPrefix(wsk.prefix, kk.prefix) && strings.HasSuffix(wsk.suffix, kk.suffix) {
-			c = newKeyIter(wsk)
-			(*p)["*"] = kk.value
-		} else {
-			tp = newKeyIter(k)
-		}
-	} else {
-		if wsk.prefix == "" && wsk.suffix == "" {
-			c = newKeyIter(wsk)
-			(*p)["*"] = kk.Value()
-		}
-	}
-	return
-}
-
-func (wsk *wildcardStarKey) String() string {
-	return fmt.Sprintf("&{value:%+v, prefix:%+v, suffix:%+v, params:%+v}", wsk.value, wsk.prefix, wsk.suffix, wsk.params)
-}
-
-func (wsk *wildcardStarKey) Value() string {
-	return wsk.value
-}
-
-func (wck *wildcardColonKey) Match(k Key[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], p *map[string]string) {
-	if kk, ok := k.(*wildcardStarKey); ok {
-		c = newKeyIter(wck)
-		(*p)[wck.value[1:]] = kk.prefix + kk.value + kk.suffix
-	} else {
-		c = newKeyIter(wck)
-		(*p)[wck.value[1:]] = kk.value
-	}
-	return
-}
-
-func (wck *wildcardColonKey) String() string {
-	return fmt.Sprintf("&{value:%+v, params:%+v}", wck.value, wck.params)
-}
-
-func (wck *wildcardColonKey) Value() string {
-	return wck.value
-}
-
-func (rk *regexKey) Match(k Key[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], p *map[string]string) {
-	if kk, ok := k.(*staticKey); ok {
-		isMarched := true
-		for i, kkv := 0, kk.value; i < len(rk.value) && isMarched; i++ {
-			if compiled, ok := rk.patterns.Get(rk.value[i]); ok {
-				isMarched = compiled.MatchString(kkv)
-			} else {
-				kkv, isMarched = strings.CutPrefix(kkv, rk.value[i])
-			}
-		}
-		if isMarched {
-			c = newKeyIter(rk)
-			//TODO parse regex group values to Params
-		}
-	} else {
-		tp = newKeyIter(k)
-	}
-	return
-}
-
-func (rk *regexKey) String() string {
-	return rk.Value()
-}
-
-func (rk *regexKey) Value() string {
-	return fmt.Sprint(rk.value)
-}
-
-// Main logic for parse the raw path, parse as much as the Key type allowed chars.
-func buildKeyIter(key string) KeyIterator[string] {
+// KeyIter
+// newKeyIter Function for parse the raw path, parse as much as the Key type allowed chars.
+func newKeyIter(key string) KeyIterator[string] {
 	var keys []Key[string]
 	if strings.TrimSpace(key) != "" {
 		if strings.ContainsAny(key, keySeparators) {
@@ -259,19 +264,19 @@ func buildKeyIter(key string) KeyIterator[string] {
 					ks = newKeySeparator(wildcard, pathSeparator)
 					ks.open()
 					var part string
-					for cursor++; ks.isOpened() && cursor < len(key); cursor++ {
+					for cursor++; ks.opened() && cursor < len(key); cursor++ {
 						if _, ok := ks.openWith(string(key[cursor])); ok {
 							continue
-						} else if _, ok := ks.closeWith(string(key[cursor])); ok && ks.isClosed() {
+						} else if _, ok := ks.closeWith(string(key[cursor])); ok && ks.closed() {
 							part = key[ps+1 : cursor]
 							break
 						}
 					}
-					if cursor == len(key) && ks.isOpened() {
+					if cursor == len(key) && ks.opened() {
 						part = key[ps+1:]
 						ks.close()
 					}
-					if ks.isClosed() {
+					if ks.closed() {
 						kb = cursor
 						if strings.Count(part, wildcard) != 1 || strings.Contains(part, " ") {
 							log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid wildcard key: %s at index: %d.`, key, cursor)))
@@ -302,7 +307,7 @@ func buildKeyIter(key string) KeyIterator[string] {
 					ks = newKeySeparator(regexBegin, regexEnd)
 					ks.open()
 					reBgn, reEnd := cursor, 0
-					for cursor++; cursor < len(key) && (ks.isOpened() || pathSeparator != string(key[cursor])); cursor++ {
+					for cursor++; cursor < len(key) && (ks.opened() || pathSeparator != string(key[cursor])); cursor++ {
 						if times, ok := ks.openWith(string(key[cursor])); ok {
 							if times == 1 {
 								reBgn = cursor
@@ -310,7 +315,7 @@ func buildKeyIter(key string) KeyIterator[string] {
 									parts = append(parts, key[reEnd+1:reBgn])
 								}
 							}
-						} else if _, ok := ks.closeWith(string(key[cursor])); ok && ks.isClosed() {
+						} else if _, ok := ks.closeWith(string(key[cursor])); ok && ks.closed() {
 							reEnd = cursor
 							if reBgn < reEnd {
 								part := key[reBgn : reEnd+1]
@@ -328,7 +333,7 @@ func buildKeyIter(key string) KeyIterator[string] {
 					if reEnd+1 < cursor {
 						parts = append(parts, key[reEnd+1:cursor])
 					}
-					if ks.isClosed() && len(parts) > 0 {
+					if ks.closed() && len(parts) > 0 {
 						kb = cursor
 						keys = append(keys, &regexKey{value: parts, params: params, patterns: patterns})
 					} else {
@@ -345,5 +350,19 @@ func buildKeyIter(key string) KeyIterator[string] {
 			keys = append(keys, &staticKey{key})
 		}
 	}
-	return newKeyIter(keys...)
+	return &keyIter{-1, keys}
+}
+
+func (ki *keyIter) Reset() {
+	ki.cursor = -1
+}
+func (ki *keyIter) HasNext() bool {
+	return ki.cursor+1 < len(ki.keys)
+}
+func (ki *keyIter) Next() Key[string] {
+	if ki.HasNext() {
+		ki.cursor++
+		return ki.keys[ki.cursor]
+	}
+	return nil
 }
