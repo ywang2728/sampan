@@ -14,6 +14,7 @@ func buildStaticKeyIter(ss ...string) (ki KeyIterator[string]) {
 	return &keyIter{-1, keys}
 }
 
+// staticKey
 func TestStaticKeyString(t *testing.T) {
 	tcs := []struct {
 		value  string
@@ -110,6 +111,82 @@ func TestStaticKeyMatch(t *testing.T) {
 		assert.Equal(t, len(tc.params), len(p))
 		assert.Equal(t, tc.matched, m)
 
+	}
+}
+
+// wildcardStarKey
+func TestWildcardStarKeyString(t *testing.T) {
+	tcs := []struct {
+		value  string
+		prefix string
+		suffix string
+		output string
+	}{
+		{value: "*", output: "*"},
+		{value: "*", prefix: "abc", output: "abc*"},
+		{value: "*", suffix: "def", output: "*def"},
+		{value: "*", prefix: "abc", suffix: "def", output: "abc*def"},
+		{value: "*", prefix: "abc", suffix: "def", output: "abc*def"},
+		{value: "*", prefix: "abc", suffix: "123/def", output: "abc*123/def"},
+		{value: "*", prefix: "abc/123", suffix: "def", output: "abc/123*def"},
+		{value: "*", prefix: "abc/123", suffix: "789/def", output: "abc/123*789/def"},
+	}
+	for _, tc := range tcs {
+		var sk Key[string] = &wildcardStarKey{value: tc.value, prefix: tc.prefix, suffix: tc.suffix}
+		assert.Equal(t, tc.output, sk.String())
+		assert.Equal(t, tc.output, fmt.Sprint(sk))
+	}
+}
+
+func TestWildcardStarKeyMatchIterator(t *testing.T) {
+	tcs := []struct {
+		value    string
+		prefix   string
+		suffix   string
+		path     KeyIterator[string]
+		common   KeyIterator[string]
+		tailKey  KeyIterator[string]
+		tailPath KeyIterator[string]
+	}{
+		{value: "*", path: buildStaticKeyIter("abc"), common: buildStaticKeyIter("/"), tailKey: nil, tailPath: buildStaticKeyIter("abc")},
+		{value: "/", path: buildStaticKeyIter("/", "abc"), common: buildStaticKeyIter("/"), tailKey: nil, tailPath: buildStaticKeyIter("abc")},
+		{value: "/", path: buildStaticKeyIter("/123", "abc"), common: buildStaticKeyIter("/"), tailKey: nil, tailPath: buildStaticKeyIter("123abc")},
+		{value: "/123", path: buildStaticKeyIter("/pic", "nic"), common: buildStaticKeyIter("/"), tailKey: buildStaticKeyIter("123"), tailPath: buildStaticKeyIter("picnic")},
+		{value: "/pic", path: buildStaticKeyIter("/pic", "nic"), common: buildStaticKeyIter("/pic"), tailKey: nil, tailPath: buildStaticKeyIter("nic")},
+		{value: "/pic", path: buildStaticKeyIter("/picture", "/nic"), common: buildStaticKeyIter("/pic"), tailKey: nil, tailPath: buildStaticKeyIter("ture/nic")},
+		{value: "/abc", path: buildStaticKeyIter("/"), common: buildStaticKeyIter("/"), tailKey: buildStaticKeyIter("abc"), tailPath: nil},
+		{value: "/picnic", path: buildStaticKeyIter("/abc", "/hello", "world"), common: buildStaticKeyIter("/"), tailKey: buildStaticKeyIter("picnic"), tailPath: buildStaticKeyIter("abc/hello", "world")},
+		{value: "/123", path: buildStaticKeyIter("/123abc"), common: buildStaticKeyIter("/123"), tailKey: nil, tailPath: buildStaticKeyIter("abc")},
+		{value: "/123/", path: buildStaticKeyIter("/123/abc"), common: buildStaticKeyIter("/123/"), tailKey: nil, tailPath: buildStaticKeyIter("abc")},
+		{value: "123/", path: buildStaticKeyIter("/123/abc"), common: nil, tailKey: buildStaticKeyIter("123/"), tailPath: buildStaticKeyIter("/123/abc")},
+		{value: "123/", path: buildStaticKeyIter("/123", "/abc"), common: nil, tailKey: buildStaticKeyIter("123/"), tailPath: buildStaticKeyIter("/123", "/abc")},
+		{value: "123", path: buildStaticKeyIter("/123/abc"), common: nil, tailKey: buildStaticKeyIter("123"), tailPath: buildStaticKeyIter("/123/abc")},
+		{value: "123abc", path: buildStaticKeyIter("123/abc"), common: buildStaticKeyIter("123"), tailKey: buildStaticKeyIter("abc"), tailPath: buildStaticKeyIter("/abc")},
+		{value: "123abc", path: buildStaticKeyIter("123/abc", "def"), common: buildStaticKeyIter("123"), tailKey: buildStaticKeyIter("abc"), tailPath: buildStaticKeyIter("/abcdef")},
+		{value: "123/abc", path: buildStaticKeyIter("123/"), common: buildStaticKeyIter("123/"), tailKey: buildStaticKeyIter("abc"), tailPath: nil},
+	}
+	for _, tc := range tcs {
+		var sk Key[string] = &staticKey{value: tc.value}
+		assert.Equal(t, tc.value, sk.(*staticKey).value)
+		c, tk, tp := sk.MatchIterator(tc.path)
+		if tc.common == nil {
+			assert.Nil(t, c)
+		} else {
+			assert.True(t, c.HasNext())
+			assert.Equal(t, tc.common.Next().(*staticKey).value, c.Next().(*staticKey).value)
+		}
+		if tc.tailKey == nil {
+			assert.Nil(t, tk)
+		} else {
+			assert.True(t, tk.HasNext())
+			assert.Equal(t, tc.tailKey.Next().(*staticKey).value, tk.Next().(*staticKey).value)
+		}
+		if tc.tailPath == nil {
+			assert.Nil(t, tp)
+		} else {
+			assert.True(t, tp.HasNext())
+			assert.Equal(t, tc.tailPath.Next().(*staticKey).value, tp.Next().(*staticKey).value)
+		}
 	}
 }
 
@@ -215,4 +292,17 @@ func TestKeySeparatorOpenAndClose(t *testing.T) {
 		assert.Equal(t, tc.isForceClosed, status)
 		assert.Equal(t, tc.isForceClosed, ks.closed())
 	}
+}
+
+func TestToto(t *testing.T) {
+	type Hello struct {
+		s []string
+		c int
+	}
+	a := Hello{[]string{"abc"}, 10}
+	b := a
+	b.c = 20
+	b.s = append(b.s, "123")
+	fmt.Printf("%+v  slice p: %p %p\n", a, &a.c, &a)
+	fmt.Printf("%+v slice p: %p %p\n", b, &b.c, &b)
 }

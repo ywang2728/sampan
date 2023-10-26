@@ -111,27 +111,31 @@ func (wsk *wildcardStarKey) String() string {
 	return wsk.prefix + wsk.value + wsk.suffix
 }
 func (wsk *wildcardStarKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string]) {
-	//if kk, ok := k.(*staticKey); ok {
-	//	if wsk.prefix == ""
-	//	if strings.HasPrefix(wsk.prefix, kk.value) && strings.HasSuffix(wsk.suffix, kk.value) {
-	//		c = newKeyIter(wsk)
-	//		(*p)["*"] = strings.TrimPrefix(strings.TrimSuffix(kk.value, wsk.suffix), wsk.prefix)
-	//	} else {
-	//		tp = newKeyIter(k)
-	//	}
-	//} else if kk, ok := k.(*wildcardStarKey); ok {
-	//	if strings.HasPrefix(wsk.prefix, kk.prefix) && strings.HasSuffix(wsk.suffix, kk.suffix) {
-	//		c = newKeyIter(wsk)
-	//		(*p)["*"] = kk.value
-	//	} else {
-	//		tp = newKeyIter(k)
-	//	}
-	//} else {
-	//	if wsk.prefix == "" && wsk.suffix == "" {
-	//		c = newKeyIter(wsk)
-	//		(*p)["*"] = kk.value
-	//	}
-	//}
+	if ki.HasNext() {
+		instKI := ki.(*keyIter)
+		sb := strings.Builder{}
+		matched := false
+		for i, l := instKI.cursor+1, len(instKI.keys); i < l && !matched; i++ {
+			sb.WriteString(instKI.keys[i].String())
+			if _, ok := strings.CutPrefix(sb.String(), wsk.prefix); ok {
+				if wsk.suffix == "" {
+					ki.(*keyIter).cursor = l
+					c = ki
+					matched = true
+				} else if _, ok := strings.CutSuffix(sb.String(), wsk.suffix); ok {
+					ki.(*keyIter).cursor = i
+					c = ki
+					if i < l-1 {
+						tp = &keyIter{i + 1, instKI.keys}
+					}
+					matched = true
+				}
+			}
+		}
+		if !matched {
+			tp = ki
+		}
+	}
 	return
 }
 func (wsk *wildcardStarKey) Match(s string) (t string, p map[string]string, matched bool) {
@@ -152,13 +156,22 @@ func (wck *wildcardColonKey) String() string {
 	return wck.value
 }
 func (wck *wildcardColonKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string]) {
-	//if kk, ok := k.(*wildcardStarKey); ok {
-	//	c = newKeyIter(wck)
-	//	(*p)[wck.value[1:]] = kk.prefix + kk.value + kk.suffix
-	//} else {
-	//	c = newKeyIter(wck)
-	//	(*p)[wck.value[1:]] = kk.value
-	//}
+	if ki.HasNext() {
+		instKI := ki.(*keyIter)
+		i := instKI.cursor + 1
+		if instKey, ok := instKI.keys[i].(*staticKey); ok {
+			j := strings.Index(instKey.value, pathSeparator)
+			if j > 0 {
+				c = &keyIter{cursor: -1, keys: []Key[string]{&staticKey{instKey.value[:j]}}}
+				if j < len(instKey.value) {
+					instKey.value = instKey.value[j:]
+					tp = ki
+				}
+			} else {
+				tp = ki
+			}
+		}
+	}
 	return
 }
 func (wck *wildcardColonKey) Match(s string) (t string, p map[string]string, matched bool) {
@@ -172,7 +185,7 @@ func (wck *wildcardColonKey) Match(s string) (t string, p map[string]string, mat
 
 // regexKey
 func (rk *regexKey) String() string {
-	return fmt.Sprint(rk.value)
+	return strings.Join(rk.value, "")
 }
 func (rk *regexKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string]) {
 	//if kk, ok := k.(*staticKey); ok {
@@ -195,7 +208,39 @@ func (rk *regexKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string]
 }
 func (rk *regexKey) Match(s string) (t string, p map[string]string, matched bool) {
 	matched = true
-
+	sb := strings.Builder{}
+	for _, raw := range rk.value {
+		if compiled, ok := rk.patterns.Get(raw); ok {
+			if loc := compiled.FindStringIndex(s); loc != nil && loc[0] == 0 {
+				if loc[1] == len(s) || s[loc[1]] == '/' {
+					toBeMatched := s[loc[0]:loc[1]]
+					if s, matched = strings.CutPrefix(s, toBeMatched); matched {
+						sb.WriteString(toBeMatched)
+						if names := compiled.SubexpNames(); len(names) > 1 {
+							for i, match := range compiled.FindStringSubmatch(toBeMatched) {
+								if len(names[i]) != 0 {
+									p[names[i]] = match
+								}
+							}
+						}
+					}
+				} else {
+					matched = false
+				}
+			} else {
+				matched = false
+			}
+		} else {
+			if s, matched = strings.CutPrefix(s, raw); matched {
+				sb.WriteString(raw)
+			} else {
+				matched = false
+			}
+		}
+		if matched {
+			t = s
+		}
+	}
 	return
 }
 
