@@ -62,6 +62,14 @@ var (
 		regexp2.MustCompile(`(?<prefix>\\*)(?=\\cJ)(?<target>\\cJ)`, 0):                 `\n`,
 		regexp2.MustCompile(`(?<prefix>\\*)(?=\\x0d)(?<target>\\x0d)`, 0):               `\r`,
 		regexp2.MustCompile(`(?<prefix>\\*)(?=\\cM)(?<target>\\cM)`, 0):                 `\r`,
+		regexp2.MustCompile(`(?<prefix>\\*)(?=\\s)(?<target>\\s)`, 0):                   `[ \f\n\r\t\v]`,
+		regexp2.MustCompile(`(?<prefix>\\*)(?=\\S)(?<target>\\S)`, 0):                   `[^ \f\n\r\t\v]`,
+		regexp2.MustCompile(`(?<prefix>\\*)(?=\\x09)(?<target>\\x09)`, 0):               `\t`,
+		regexp2.MustCompile(`(?<prefix>\\*)(?=\\cI)(?<target>\\cI)`, 0):                 `\t`,
+		regexp2.MustCompile(`(?<prefix>\\*)(?=\\x0b)(?<target>\\x0b)`, 0):               `\v`,
+		regexp2.MustCompile(`(?<prefix>\\*)(?=\\cK)(?<target>\\cK)`, 0):                 `\v`,
+		regexp2.MustCompile(`(?<prefix>\\*)(?=\\w)(?<target>\\w)`, 0):                   `[A-Za-z0-9_]`,
+		regexp2.MustCompile(`(?<prefix>\\*)(?=\\W)(?<target>\\W)`, 0):                   `[^A-Za-z0-9_]`,
 	}
 )
 
