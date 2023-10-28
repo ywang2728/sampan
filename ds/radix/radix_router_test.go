@@ -294,15 +294,61 @@ func TestKeySeparatorOpenAndClose(t *testing.T) {
 	}
 }
 
-func TestToto(t *testing.T) {
-	type Hello struct {
-		s []string
-		c int
+func TestFormatRePattern(t *testing.T) {
+	tcs := []struct {
+		before string
+		after  string
+	}{
+		//{`(?P<aa>bb)`, `(bb)`},
+		//{`\(?P<aa>bb)`, `\(?P<aa>bb)`},
+		//{`\\(?P<aa>bb)`, `\\(bb)`},
+		//{`\\\(?P<aa>bb)`, `\\\(?P<aa>bb)`},
+		//{`(?P<aa>bb)cc(?P<dd>ee)ff`, `(bb)cc(ee)ff`},
+		//{`\(?P<aa>bb)cc(?P<dd>ee)ff`, `\(?P<aa>bb)cc(ee)ff`},
+		//{`\(?P<aa>bb)cc\\(?P<dd>ee)ff`, `\(?P<aa>bb)cc\\(ee)ff`},
+		//{`\\\(?P<aa>bb)cc\\(?P<dd>ee)ff`, `\\\(?P<aa>bb)cc\\(ee)ff`},
+		//{`\d`, `[0-9]`},
+		//{`\dabc\d`, `[0-9]abc[0-9]`},
+		//{`\\dabc\d`, `\\dabc[0-9]`},
+		//{`\\\d`, `\\[0-9]`},
+		//{`(?P<aa>bb)abc\d`, `(bb)abc[0-9]`},
+		//{`\D`, `[^0-9]`},
+		//{`\Dabc\D`, `[^0-9]abc[^0-9]`},
+		//{`\\Dabc\D`, `\\Dabc[^0-9]`},
+		//{`\\\D`, `\\[^0-9]`},
+		//{`(?P<aa>bb)abc\ddef\D`, `(bb)abc[0-9]def[^0-9]`},
+		//{`\x0c`, `\f`},
+		//{`\x0cabc\x0c`, `\fabc\f`},
+		//{`\\x0cabc\x0c`, `\\x0cabc\f`},
+		//{`\\\x0c`, `\\\f`},
+		//{`(?P<aa>bb)abc\ddef\D567\x0c`, `(bb)abc[0-9]def[^0-9]567\f`},
+		//{`\x0a`, `\n`},
+		//{`\x0aabc\x0a`, `\nabc\n`},
+		//{`\\x0aabc\x0a`, `\\x0aabc\n`},
+		//{`\\\x0a`, `\\\n`},
+		//{`(?P<aa>bb)abc\ddef\D567\x0c789\cL67\x0a`, `(bb)abc[0-9]def[^0-9]567\f789\f67\n`},
+		//{`\cJ`, `\n`},
+		//{`\cJabc\cJ`, `\nabc\n`},
+		//{`\\cJabc\cJ`, `\\cJabc\n`},
+		//{`\\\cJ`, `\\\n`},
+		//{`(?P<aa>bb)abc\ddef\D567\x0c789\cL67\x0ahhh\cJ`, `(bb)abc[0-9]def[^0-9]567\f789\f67\nhhh\n`},
+		//{`\x0d`, `\r`},
+		//{`\x0dabc\x0d`, `\rabc\r`},
+		//{`\\x0dabc\x0d`, `\\x0dabc\r`},
+		//{`\\\x0d`, `\\\r`},
+		//{`(?P<aa>bb)abc\ddef\D567\x0c789\cL67\x0annn\x0d`, `(bb)abc[0-9]def[^0-9]567\f789\f67\nnnn\r`},
+		//{`\cM`, `\r`},
+		//{`\cMabc\cM`, `\rabc\r`},
+		//{`\\cMabc\cM`, `\\cMabc\r`},
+		//{`\\\cM`, `\\\r`},
+		//{`(?P<aa>bb)abc\ddef\D567\x0c789\cL67\x0ahhh\cJcns\cM`, `(bb)abc[0-9]def[^0-9]567\f789\f67\nhhh\ncns\r`},
 	}
-	a := Hello{[]string{"abc"}, 10}
-	b := a
-	b.c = 20
-	b.s = append(b.s, "123")
-	fmt.Printf("%+v  slice p: %p %p\n", a, &a.c, &a)
-	fmt.Printf("%+v slice p: %p %p\n", b, &b.c, &b)
+	for _, tc := range tcs {
+		assert.Equal(t, tc.after, formatRePattern(tc.before))
+	}
+}
+
+func TestToto(t *testing.T) {
+	a := "\\"
+	fmt.Println(a)
 }

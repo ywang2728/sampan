@@ -3,6 +3,7 @@ package radix
 import (
 	"errors"
 	"fmt"
+	"github.com/dlclark/regexp2"
 	"github.com/ywang2728/sampan/ds/linkedhashmap"
 	"log"
 	"regexp"
@@ -47,6 +48,20 @@ type (
 	keyIter struct {
 		cursor int
 		keys   []Key[string]
+	}
+)
+
+var (
+	reFormatPatterns = map[*regexp2.Regexp]string{
+		regexp2.MustCompile(`(?<prefix>\\*)(?=\(\?P<[^>]*>)(?<target>\(\?P<[^>]*>)`, 0): `(`,
+		regexp2.MustCompile(`(?<prefix>\\*)(?=\\d)(?<target>\\d)`, 0):                   `[0-9]`,
+		regexp2.MustCompile(`(?<prefix>\\*)(?=\\D)(?<target>\\D)`, 0):                   `[^0-9]`,
+		regexp2.MustCompile(`(?<prefix>\\*)(?=\\x0c)(?<target>\\x0c)`, 0):               `\f`,
+		regexp2.MustCompile(`(?<prefix>\\*)(?=\\cL)(?<target>\\cL)`, 0):                 `\f`,
+		regexp2.MustCompile(`(?<prefix>\\*)(?=\\x0a)(?<target>\\x0a)`, 0):               `\n`,
+		regexp2.MustCompile(`(?<prefix>\\*)(?=\\cJ)(?<target>\\cJ)`, 0):                 `\n`,
+		regexp2.MustCompile(`(?<prefix>\\*)(?=\\x0d)(?<target>\\x0d)`, 0):               `\r`,
+		regexp2.MustCompile(`(?<prefix>\\*)(?=\\cM)(?<target>\\cM)`, 0):                 `\r`,
 	}
 )
 
@@ -288,6 +303,21 @@ func (ks *keySeparator) closed() bool {
 	return 0 == ks.cnt.Load()
 }
 
+// Function for sanitize regex pattern and remove group name for regex pattern match.
+func formatRePattern(p string) string {
+	for k, v := range reFormatPatterns {
+		p, _ = k.ReplaceFunc(p, func(m regexp2.Match) string {
+			pg := m.GroupByName("prefix")
+			if pg.Length&1 == 0 {
+				return pg.String() + v
+			} else {
+				return pg.String() + m.GroupByName("target").String()
+			}
+		}, -1, -1)
+	}
+	return p
+}
+
 // KeyIter
 // newKeyIter Function for parse the raw path, parse as much as the Key type allowed chars.
 func newKeyIter(key string) KeyIterator[string] {
@@ -364,13 +394,17 @@ func newKeyIter(key string) KeyIterator[string] {
 							reEnd = cursor
 							if reBgn < reEnd {
 								part := key[reBgn : reEnd+1]
-								parts = append(parts, part)
-								compiled := regexp.MustCompile(part)
-								patterns.Put(part, compiled)
-								for _, subExpName := range compiled.SubexpNames() {
-									if subExpName != "" {
-										params[subExpName] = ""
+								compiled, err := regexp.Compile(part)
+								if err == nil {
+									parts = append(parts, part)
+									patterns.Put(part, compiled)
+									for _, subExpName := range compiled.SubexpNames() {
+										if subExpName != "" {
+											params[subExpName] = ""
+										}
 									}
+								} else {
+									log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid regex key: %s at index: %d.`, part, reBgn)))
 								}
 							}
 						}
