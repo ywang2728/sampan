@@ -3,6 +3,7 @@ package radix
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"strings"
 	"testing"
 )
 
@@ -123,16 +124,9 @@ func TestWildcardStarKeyString(t *testing.T) {
 		output string
 	}{
 		{value: "*", output: "*"},
-		{value: "*", prefix: "abc", output: "abc*"},
-		{value: "*", suffix: "def", output: "*def"},
-		{value: "*", prefix: "abc", suffix: "def", output: "abc*def"},
-		{value: "*", prefix: "abc", suffix: "def", output: "abc*def"},
-		{value: "*", prefix: "abc", suffix: "123/def", output: "abc*123/def"},
-		{value: "*", prefix: "abc/123", suffix: "def", output: "abc/123*def"},
-		{value: "*", prefix: "abc/123", suffix: "789/def", output: "abc/123*789/def"},
 	}
 	for _, tc := range tcs {
-		var sk Key[string] = &wildcardStarKey{value: tc.value, prefix: tc.prefix, suffix: tc.suffix}
+		var sk Key[string] = &wildcardStarKey{value: tc.value}
 		assert.Equal(t, tc.output, sk.String())
 		assert.Equal(t, tc.output, fmt.Sprint(sk))
 	}
@@ -389,6 +383,7 @@ func TestFormatRePattern(t *testing.T) {
 }
 
 func TestToto(t *testing.T) {
-	a := "\\"
-	fmt.Println(a)
+	a := "abc"
+	tail, ok := strings.CutPrefix(a, "abc")
+	fmt.Printf("tail:%s, matched:%v", tail, ok)
 }
