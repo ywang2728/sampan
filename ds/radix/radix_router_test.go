@@ -457,7 +457,6 @@ func TestNewKeyIter(t *testing.T) {
 				assert.Equal(t, k, ki.Next())
 			}
 			assert.False(t, ki.HasNext())
-			fmt.Println(ki)
 		}
 	}
 }
