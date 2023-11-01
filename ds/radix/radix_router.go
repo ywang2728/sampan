@@ -16,7 +16,6 @@ const (
 	regexEnd      = `}`
 	wildcardStar  = `*`
 	wildcardColon = `:`
-	keySeparators = `{:*`
 )
 
 type (
@@ -144,11 +143,6 @@ func (ks *keySeparator) closed() bool {
 func newKeyIter(key string) KeyIterator[string] {
 	var keys []Key[string]
 	if strings.TrimSpace(key) != "" {
-		if wc := strings.Count(key, wildcardStar); wc > 1 {
-			log.Fatalf("Key parsing error, %v", errors.New(fmt.Sprintf("Invalid wildcard key: %s at index: %d.", key, indexNth(key, wildcardStar[0], 2))))
-		} else if wc == 1 && !strings.HasSuffix(key, wildcardStar) {
-			log.Fatalf("Key parsing error, %v", errors.New(fmt.Sprintf("Invalid wildcard key: %s at index: %d.", key, indexNth(key, wildcardStar[0], 1))))
-		}
 		var ks *keySeparator
 		var kb int
 		for cursor, ps := 0, -1; cursor < len(key); {
@@ -157,6 +151,9 @@ func newKeyIter(key string) KeyIterator[string] {
 				ps = cursor
 				cursor++
 			case wildcardStar:
+				if cursor+1 != len(key) {
+					log.Fatalf("Key parsing error, %v", errors.New(fmt.Sprintf("Invalid wildcard key: %s at index: %d.", key, cursor)))
+				}
 				if kb < cursor {
 					keys = append(keys, &staticKey{key[kb:cursor]})
 				}
@@ -167,7 +164,7 @@ func newKeyIter(key string) KeyIterator[string] {
 				if cursor != ps+1 {
 					log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid wildcard key: %s at index: %d.`, key, cursor)))
 				}
-				if kb <= cursor {
+				if kb < cursor {
 					keys = append(keys, &staticKey{key[kb:cursor]})
 				}
 				ks = newKeySeparator(wildcardColon, pathSeparator)
@@ -186,13 +183,13 @@ func newKeyIter(key string) KeyIterator[string] {
 					ks.close()
 				}
 				if ks.closed() && len(part) > 1 && strings.HasPrefix(part, wildcardColon) && strings.Count(part, wildcardColon) == 1 && !strings.Contains(part, " ") {
-					keys = append(keys, &wildcardColonKey{value: part, params: map[string]string{part: ""}})
+					keys = append(keys, &wildcardColonKey{value: part, params: map[string]string{part[1:]: ""}})
 					kb = cursor
 				} else {
 					log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid wildcard key: %s at index: %d.`, key, cursor)))
 				}
 			case regexBegin:
-				if kb <= cursor {
+				if kb < cursor {
 					keys = append(keys, &staticKey{key[kb:cursor]})
 				}
 				kb = cursor
@@ -224,7 +221,7 @@ func newKeyIter(key string) KeyIterator[string] {
 						log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid regex key: %s at index: %d.`, part, cursor)))
 					}
 					keys = append(keys, &regexKey{value: part, pattern: compiled, params: params})
-					kb = cursor
+					kb = cursor + 1
 				} else {
 					log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid Regex key: %s at index: %d.`, key, cursor)))
 				}
