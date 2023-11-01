@@ -84,6 +84,17 @@ func formatRePattern(p string) string {
 	return p
 }
 
+func indexNth(key string, char uint8, n int) int {
+	for occur, i := 0, 0; i < len(key); i++ {
+		if key[i] == char {
+			if occur++; occur == n {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
 // KeySeparator
 func newKeySeparator(begin string, end string) (ks *keySeparator) {
 	return &keySeparator{bs: begin, es: end, cnt: atomic.Int32{}}
@@ -133,96 +144,96 @@ func (ks *keySeparator) closed() bool {
 func newKeyIter(key string) KeyIterator[string] {
 	var keys []Key[string]
 	if strings.TrimSpace(key) != "" {
-		key, _, _ = strings.Cut(key, wildcardStar)
-		if strings.ContainsAny(key, keySeparators) {
-			var ks *keySeparator
-			var kb int
-			for cursor, ps := 0, -1; cursor < len(key); {
-				switch string(key[cursor]) {
-				case pathSeparator:
-					ps = cursor
-					cursor++
-				case wildcardStar:
-					if kb <= cursor {
-						keys = append(keys, &staticKey{key[kb:cursor]})
-					}
-					keys = append(keys, &wildcardStarKey{value: wildcardStar, params: map[string]string{wildcardStar: ``}})
-					cursor++
-					kb = cursor
-				case wildcardColon:
-					if cursor != ps+1 {
-						log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid wildcard key: %s at index: %d.`, key, cursor)))
-					}
-					if kb <= cursor {
-						keys = append(keys, &staticKey{key[kb:cursor]})
-					}
-					ks = newKeySeparator(wildcardColon, pathSeparator)
-					ks.open()
-					var part string
-					for cursor++; ks.opened() && cursor < len(key); cursor++ {
-						if _, ok := ks.openWith(string(key[cursor])); ok {
-							continue
-						} else if _, ok := ks.closeWith(string(key[cursor])); ok && ks.closed() {
-							part = key[ps+1 : cursor]
-							break
-						}
-					}
-					if cursor == len(key) && ks.opened() {
-						part = key[ps+1:]
-						ks.close()
-					}
-					if ks.closed() && len(part) > 1 && strings.HasPrefix(part, wildcardColon) && strings.Count(part, wildcardColon) == 1 && !strings.Contains(part, " ") {
-						keys = append(keys, &wildcardColonKey{value: part, params: map[string]string{part: ""}})
-						kb = cursor
-					} else {
-						log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid wildcard key: %s at index: %d.`, key, cursor)))
-					}
-				case regexBegin:
-					if kb <= cursor {
-						keys = append(keys, &staticKey{key[kb:cursor]})
-					}
-					kb = cursor
-					ks = newKeySeparator(regexBegin, regexEnd)
-					ks.open()
-					var part string
-					for cursor++; ks.opened() && cursor < len(key); cursor++ {
-						if _, ok := ks.openWith(string(key[cursor])); ok {
-							continue
-						} else if _, ok := ks.closeWith(string(key[cursor])); ok && ks.closed() {
-							part = key[kb : cursor+1]
-							break
-						}
-					}
-					if cursor == len(key) && ks.opened() {
-						part = key[kb:]
-						ks.close()
-					}
-					if ks.closed() && len(part) > 3 && strings.HasPrefix(part, regexBegin) && strings.HasSuffix(part, regexEnd) {
-						params := map[string]string{}
-						compiled, err := regexp.Compile(part[1 : len(part)-1])
-						if err == nil {
-							for _, subExpName := range compiled.SubexpNames() {
-								if subExpName != "" {
-									params[subExpName] = ""
-								}
-							}
-						} else {
-							log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid regex key: %s at index: %d.`, part, cursor)))
-						}
-						keys = append(keys, &regexKey{value: part, pattern: compiled, params: params})
-						kb = cursor
-					} else {
-						log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid Regex key: %s at index: %d.`, key, cursor)))
-					}
-				default:
-					cursor++
+		if wc := strings.Count(key, wildcardStar); wc > 1 {
+			log.Fatalf("Key parsing error, %v", errors.New(fmt.Sprintf("Invalid wildcard key: %s at index: %d.", key, indexNth(key, wildcardStar[0], 2))))
+		} else if wc == 1 && !strings.HasSuffix(key, wildcardStar) {
+			log.Fatalf("Key parsing error, %v", errors.New(fmt.Sprintf("Invalid wildcard key: %s at index: %d.", key, indexNth(key, wildcardStar[0], 1))))
+		}
+		var ks *keySeparator
+		var kb int
+		for cursor, ps := 0, -1; cursor < len(key); {
+			switch string(key[cursor]) {
+			case pathSeparator:
+				ps = cursor
+				cursor++
+			case wildcardStar:
+				if kb < cursor {
+					keys = append(keys, &staticKey{key[kb:cursor]})
 				}
+				keys = append(keys, &wildcardStarKey{value: wildcardStar, params: map[string]string{wildcardStar: ``}})
+				cursor++
+				kb = cursor
+			case wildcardColon:
+				if cursor != ps+1 {
+					log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid wildcard key: %s at index: %d.`, key, cursor)))
+				}
+				if kb <= cursor {
+					keys = append(keys, &staticKey{key[kb:cursor]})
+				}
+				ks = newKeySeparator(wildcardColon, pathSeparator)
+				ks.open()
+				var part string
+				for cursor++; ks.opened() && cursor < len(key); cursor++ {
+					if _, ok := ks.openWith(string(key[cursor])); ok {
+						continue
+					} else if _, ok := ks.closeWith(string(key[cursor])); ok && ks.closed() {
+						part = key[ps+1 : cursor]
+						break
+					}
+				}
+				if cursor == len(key) && ks.opened() {
+					part = key[ps+1:]
+					ks.close()
+				}
+				if ks.closed() && len(part) > 1 && strings.HasPrefix(part, wildcardColon) && strings.Count(part, wildcardColon) == 1 && !strings.Contains(part, " ") {
+					keys = append(keys, &wildcardColonKey{value: part, params: map[string]string{part: ""}})
+					kb = cursor
+				} else {
+					log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid wildcard key: %s at index: %d.`, key, cursor)))
+				}
+			case regexBegin:
+				if kb <= cursor {
+					keys = append(keys, &staticKey{key[kb:cursor]})
+				}
+				kb = cursor
+				ks = newKeySeparator(regexBegin, regexEnd)
+				ks.open()
+				var part string
+				for cursor++; ks.opened() && cursor < len(key); cursor++ {
+					if _, ok := ks.openWith(string(key[cursor])); ok {
+						continue
+					} else if _, ok := ks.closeWith(string(key[cursor])); ok && ks.closed() {
+						part = key[kb : cursor+1]
+						break
+					}
+				}
+				if cursor == len(key) && ks.opened() {
+					part = key[kb:]
+					ks.close()
+				}
+				if ks.closed() && len(part) > 3 && strings.HasPrefix(part, regexBegin) && strings.HasSuffix(part, regexEnd) {
+					params := map[string]string{}
+					compiled, err := regexp.Compile(part[1 : len(part)-1])
+					if err == nil {
+						for _, subExpName := range compiled.SubexpNames() {
+							if subExpName != "" {
+								params[subExpName] = ""
+							}
+						}
+					} else {
+						log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid regex key: %s at index: %d.`, part, cursor)))
+					}
+					keys = append(keys, &regexKey{value: part, pattern: compiled, params: params})
+					kb = cursor
+				} else {
+					log.Fatalf("Key parsing error, #%v", errors.New(fmt.Sprintf(`Invalid Regex key: %s at index: %d.`, key, cursor)))
+				}
+			default:
+				cursor++
 			}
-			if kb < len(key) {
-				keys = append(keys, &staticKey{key[kb:]})
-			}
-		} else {
-			keys = append(keys, &staticKey{key})
+		}
+		if kb < len(key) {
+			keys = append(keys, &staticKey{key[kb:]})
 		}
 	}
 	return &keyIter{-1, keys}
@@ -240,6 +251,15 @@ func (ki *keyIter) Next() Key[string] {
 		return ki.keys[ki.cursor]
 	}
 	return nil
+}
+
+func (ki *keyIter) String() string {
+	var sb strings.Builder
+	sb.WriteString("keyIter{")
+	for _, k := range ki.keys {
+		sb.WriteString(fmt.Sprintf("%v, ", k))
+	}
+	return strings.TrimRight(sb.String(), ", ") + "}"
 }
 
 // staticKey

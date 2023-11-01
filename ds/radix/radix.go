@@ -18,6 +18,7 @@ type (
 	}
 
 	KeyIterator[K comparable] interface {
+		fmt.Stringer
 		Reset()
 		HasNext() bool
 		Next() Key[K]
