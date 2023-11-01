@@ -375,13 +375,19 @@ func (rk *regexKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string]
 					}
 				}
 			}
-		} else if instKey, ok := instKI.keys[i].(*wildcardStarKey); ok {
-			println(instKey)
-		} else if instKey, ok := instKI.keys[i].(*wildcardColonKey); ok {
-			println(instKey)
+		} else if _, ok := instKI.keys[i].(*wildcardStarKey); ok {
+			c = &keyIter{-1, []Key[string]{rk}}
+		} else if _, ok := instKI.keys[i].(*wildcardColonKey); ok {
+			c = &keyIter{-1, []Key[string]{rk}}
 		} else {
 			instKey, _ := instKI.keys[i].(*regexKey)
-			println(instKey)
+			if formatRePattern(rk.value) == formatRePattern(instKey.value) {
+				c = &keyIter{-1, []Key[string]{rk}}
+				tp = &keyIter{-1, instKI.keys[i+1:]}
+			} else {
+				tn = &keyIter{-1, []Key[string]{rk}}
+				tp = &keyIter{-1, instKI.keys[i:]}
+			}
 		}
 	}
 	return
