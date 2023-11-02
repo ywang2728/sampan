@@ -253,15 +253,15 @@ func (sk *staticKey) String() string {
 	return sk.value
 }
 func (sk *staticKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], override bool) {
-	if ki.HasNext() {
-		if kk, ok := ki.Next().(*staticKey); ok {
-			i, ln, lp := 0, len(sk.value), len(kk.value)
+	if k := ki.Next(); k != nil {
+		if instKey, ok := k.(*staticKey); ok {
+			i, ln, lp := 0, len(sk.value), len(instKey.value)
 			m := ln
 			if m > lp {
 				m = lp
 			}
 			for ; i < m; i++ {
-				if sk.value[i] != kk.value[i] {
+				if sk.value[i] != instKey.value[i] {
 					break
 				}
 			}
@@ -277,10 +277,10 @@ func (sk *staticKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string
 					if i == 0 {
 						tpKeys = append(tpKeys, instKI.keys[instKI.cursor:]...)
 					} else if i < lp {
-						if instKey, ok := instKI.keys[instKI.cursor+1].(*staticKey); ok {
-							instKey.value = kk.value[i:] + instKey.value
+						if instKey2, ok := instKI.keys[instKI.cursor+1].(*staticKey); ok {
+							instKey2.value = instKey.value[i:] + instKey2.value
 						} else {
-							tpKeys = append(tpKeys, &staticKey{kk.value[i:]})
+							tpKeys = append(tpKeys, &staticKey{instKey.value[i:]})
 						}
 						tpKeys = append(tpKeys, instKI.keys[instKI.cursor+1:]...)
 					} else if i == lp {
@@ -288,13 +288,18 @@ func (sk *staticKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string
 					}
 				}
 			} else if i < lp {
-				tpKeys = append(tpKeys, &staticKey{kk.value[i:]})
+				tpKeys = append(tpKeys, &staticKey{instKey.value[i:]})
 			}
 			if len(tpKeys) > 0 {
 				tp = &keyIter{-1, tpKeys}
 			}
+		} else if instKey, ok := k.(*wildcardStarKey); ok {
+			override = true
+		} else if instKey, ok := k.(*wildcardColonKey); ok {
+			override = true
 		} else {
-			tp = ki
+			instKey, _ := k.(*regexKey)
+			override = true
 		}
 	}
 	return
@@ -326,10 +331,8 @@ func (wck *wildcardColonKey) String() string {
 	return wck.value
 }
 func (wck *wildcardColonKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], override bool) {
-	if ki.HasNext() {
-		instKI := ki.(*keyIter)
-		i := instKI.cursor + 1
-		if instKey, ok := instKI.keys[i].(*staticKey); ok {
+	if k := ki.Next(); k != nil {
+		if instKey, ok := k.(*staticKey); ok {
 			j := strings.Index(instKey.value, pathSeparator)
 			if j > 0 {
 				c = &keyIter{cursor: -1, keys: []Key[string]{&staticKey{instKey.value[:j]}}}
@@ -340,6 +343,12 @@ func (wck *wildcardColonKey) MatchIterator(ki KeyIterator[string]) (c KeyIterato
 			} else {
 				tp = ki
 			}
+		} else if instKey, ok := k.(*wildcardStarKey); ok {
+
+		} else if instKey, ok := k.(*wildcardColonKey); ok {
+
+		} else {
+			instKey := k.(*regexKey)
 		}
 	}
 	return
@@ -358,7 +367,6 @@ func (rk *regexKey) String() string {
 	return rk.value
 }
 func (rk *regexKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], override bool) {
-
 	if ki.HasNext() {
 		instKI := ki.(*keyIter)
 		i := instKI.cursor + 1

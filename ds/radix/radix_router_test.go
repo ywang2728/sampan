@@ -45,6 +45,7 @@ func TestStaticKeyMatchIterator(t *testing.T) {
 		common   KeyIterator[string]
 		tailKey  KeyIterator[string]
 		tailPath KeyIterator[string]
+		override bool
 	}{
 		{value: "/", path: buildStaticKeyIter("/abc"), common: buildStaticKeyIter("/"), tailKey: nil, tailPath: buildStaticKeyIter("abc")},
 		{value: "/", path: buildStaticKeyIter("/", "abc"), common: buildStaticKeyIter("/"), tailKey: nil, tailPath: buildStaticKeyIter("abc")},
