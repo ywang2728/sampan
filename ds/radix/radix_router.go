@@ -252,7 +252,7 @@ func (ki *keyIter) String() string {
 func (sk *staticKey) String() string {
 	return sk.value
 }
-func (sk *staticKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string]) {
+func (sk *staticKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], override bool) {
 	if ki.HasNext() {
 		if kk, ok := ki.Next().(*staticKey); ok {
 			i, ln, lp := 0, len(sk.value), len(kk.value)
@@ -308,7 +308,7 @@ func (sk *staticKey) Match(s string) (t string, p map[string]string, matched boo
 func (wsk *wildcardStarKey) String() string {
 	return wsk.value
 }
-func (wsk *wildcardStarKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string]) {
+func (wsk *wildcardStarKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], override bool) {
 	if ki.HasNext() {
 		instKI := ki.(*keyIter)
 		ki.(*keyIter).cursor = len(instKI.keys)
@@ -325,7 +325,7 @@ func (wsk *wildcardStarKey) Match(s string) (t string, p map[string]string, matc
 func (wck *wildcardColonKey) String() string {
 	return wck.value
 }
-func (wck *wildcardColonKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string]) {
+func (wck *wildcardColonKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], override bool) {
 	if ki.HasNext() {
 		instKI := ki.(*keyIter)
 		i := instKI.cursor + 1
@@ -357,7 +357,7 @@ func (wck *wildcardColonKey) Match(s string) (t string, p map[string]string, mat
 func (rk *regexKey) String() string {
 	return rk.value
 }
-func (rk *regexKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string]) {
+func (rk *regexKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string], tn KeyIterator[string], tp KeyIterator[string], override bool) {
 
 	if ki.HasNext() {
 		instKI := ki.(*keyIter)

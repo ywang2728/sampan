@@ -12,7 +12,7 @@ type (
 	Key[K comparable] interface {
 		fmt.Stringer
 		// MatchIterator for putting node by Key, return common KeyIterator, current key tail KeyIterator and new putting KeyIterator
-		MatchIterator(KeyIterator[K]) (KeyIterator[K], KeyIterator[K], KeyIterator[K])
+		MatchIterator(KeyIterator[K]) (KeyIterator[K], KeyIterator[K], KeyIterator[K], bool)
 		// Match for getting node by Key, return bool for matched, K for tail and
 		Match(K) (K, map[K]K, bool)
 	}
@@ -113,21 +113,51 @@ func (r *Radix[K, V]) putRec(n *node[K, V], ki KeyIterator[K], v *V) (nn *node[K
 				nn.v = v
 			}
 		} else {
-			c, tn, tp := n.k.MatchIterator(ki)
+			c, tn, tp, override := n.k.MatchIterator(ki)
 			if c != nil && c.HasNext() {
-				if tn != nil && tn.HasNext() {
-					nn = r.putRec(nil, c, nil)
-					n.k = tn.Next()
-					nn.nodes = append(nn.nodes, n)
-				} else {
+				if override {
+					n.k = c.Next()
+					if tn != nil && tn.HasNext() {
+						var tnn *node[K, V]
+						for i := 0; i < len(n.nodes); i++ {
+							tn.Reset()
+							if cc, _, _, _ := n.nodes[i].k.MatchIterator(tn); cc != nil && cc.HasNext() {
+								tnn = r.putRec(n.nodes[i], tn, v)
+								n.nodes[i] = tnn
+								break
+							}
+						}
+						if tnn == nil {
+							tnn = r.putRec(nil, tn, v)
+							n.nodes = append(n.nodes, tnn)
+						}
+					}
 					nn = n
+				} else {
+					if tn != nil && tn.HasNext() {
+						nn = r.putRec(nil, c, nil)
+						n.k = tn.Next()
+						nn.nodes = append(nn.nodes, n)
+					} else {
+						nn = n
+					}
 				}
+				//if tn != nil && tn.HasNext() {
+				//	nn = r.putRec(nil, c, nil)
+				//	n.k = tn.Next()
+				//	nn.nodes = append(nn.nodes, n)
+				//} else {
+				//	if override && n.v == nil {
+				//		n.k = c.Next()
+				//	}
+				//	nn = n
+				//}
 			}
 			if tp != nil && tp.HasNext() {
 				var tpn *node[K, V]
 				for i := 0; i < len(n.nodes); i++ {
 					tp.Reset()
-					if cc, _, _ := n.nodes[i].k.MatchIterator(tp); cc != nil && cc.HasNext() {
+					if cc, _, _, _ := n.nodes[i].k.MatchIterator(tp); cc != nil && cc.HasNext() {
 						tpn = r.putRec(n.nodes[i], tp, v)
 						n.nodes[i] = tpn
 						break
