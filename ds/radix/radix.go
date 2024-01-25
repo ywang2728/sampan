@@ -11,7 +11,7 @@ import (
 type (
 	Key[K comparable] interface {
 		fmt.Stringer
-		// MatchIterator for putting node by Key, return common KeyIterator, current key tail KeyIterator and new putting KeyIterator
+		// MatchIterator for putting node by Key, return common KeyIterator, current key tail KeyIterator, new putting KeyIterator and if the node is needed to be overridden.
 		MatchIterator(KeyIterator[K]) (KeyIterator[K], KeyIterator[K], KeyIterator[K], bool)
 		// Match for getting node by Key, return bool for matched, K for tail and
 		Match(K) (K, map[K]K, bool)
@@ -33,7 +33,7 @@ type (
 	Radix[K comparable, V any] struct {
 		size int
 		root *node[K, V]
-		// Func to build Key Iterator, the Key struct could be String, Wildcard, or Regex.
+		// Func to build Key Iterator, the Key struct could be Text, Wildcard, or Regex.
 		newKeyIterator func(K) KeyIterator[K]
 		sync.RWMutex
 	}
@@ -170,7 +170,7 @@ func (r *Radix[K, V]) putRec(n *node[K, V], ki KeyIterator[K], v *V) (nn *node[K
 			} else if nn.v == nil {
 				nn.v = v
 			} else {
-				log.Fatalf("Input key error, %#v\t", errors.New(fmt.Sprintf(`duplicated key:%#v`, ki.Next())))
+				log.Fatalf("Input key error, %#v\t", errors.New(fmt.Sprintf(`Duplicated key:%#v`, ki.Next())))
 			}
 		}
 	}

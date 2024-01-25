@@ -293,13 +293,27 @@ func (sk *staticKey) MatchIterator(ki KeyIterator[string]) (c KeyIterator[string
 			if len(tpKeys) > 0 {
 				tp = &keyIter{-1, tpKeys}
 			}
-		} else if instKey, ok := k.(*wildcardStarKey); ok {
-			override = true
-		} else if instKey, ok := k.(*wildcardColonKey); ok {
-			override = true
+		} else if _, ok := k.(*wildcardStarKey); ok {
+			c, override = &keyIter{-1, []Key[string]{k}}, true
+		} else if _, ok := k.(*wildcardColonKey); ok {
+			c, override = &keyIter{-1, []Key[string]{k}}, true
+			if ki.HasNext() {
+				if instKI, ok := ki.(*keyIter); ok {
+					tp = &keyIter{-1, instKI.keys[instKI.cursor+1:]}
+				}
+			}
 		} else {
-			instKey, _ := k.(*regexKey)
-			override = true
+			if override = k.(*regexKey).pattern.MatchString(sk.value); override {
+				c = &keyIter{-1, []Key[string]{k}}
+				if instKI, ok := ki.(*keyIter); ok && ki.HasNext() {
+					tp = &keyIter{-1, instKI.keys[instKI.cursor+1:]}
+				}
+			} else {
+				tn = &keyIter{-1, []Key[string]{sk}}
+				if instKI, ok := ki.(*keyIter); ok {
+					tp = &keyIter{-1, instKI.keys[instKI.cursor:]}
+				}
+			}
 		}
 	}
 	return
@@ -343,12 +357,12 @@ func (wck *wildcardColonKey) MatchIterator(ki KeyIterator[string]) (c KeyIterato
 			} else {
 				tp = ki
 			}
-		} else if instKey, ok := k.(*wildcardStarKey); ok {
+		} else if _, ok := k.(*wildcardStarKey); ok {
 
-		} else if instKey, ok := k.(*wildcardColonKey); ok {
+		} else if _, ok := k.(*wildcardColonKey); ok {
 
 		} else {
-			instKey := k.(*regexKey)
+			//_ := k.(*regexKey)
 		}
 	}
 	return

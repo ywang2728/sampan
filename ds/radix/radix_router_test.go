@@ -8,10 +8,10 @@ import (
 	"testing"
 )
 
-func buildStaticKeyIter(ss ...string) (ki KeyIterator[string]) {
+func buildKeyIter(ss ...string) (ki KeyIterator[string]) {
 	var keys []Key[string]
 	for _, s := range ss {
-		keys = append(keys, &staticKey{s})
+		keys = append(keys, newKeyIter(s).(*keyIter).keys...)
 	}
 	return &keyIter{-1, keys}
 }
@@ -47,44 +47,78 @@ func TestStaticKeyMatchIterator(t *testing.T) {
 		tailPath KeyIterator[string]
 		override bool
 	}{
-		{value: "/", path: buildStaticKeyIter("/abc"), common: buildStaticKeyIter("/"), tailKey: nil, tailPath: buildStaticKeyIter("abc")},
-		{value: "/", path: buildStaticKeyIter("/", "abc"), common: buildStaticKeyIter("/"), tailKey: nil, tailPath: buildStaticKeyIter("abc")},
-		{value: "/", path: buildStaticKeyIter("/123", "abc"), common: buildStaticKeyIter("/"), tailKey: nil, tailPath: buildStaticKeyIter("123abc")},
-		{value: "/123", path: buildStaticKeyIter("/pic", "nic"), common: buildStaticKeyIter("/"), tailKey: buildStaticKeyIter("123"), tailPath: buildStaticKeyIter("picnic")},
-		{value: "/pic", path: buildStaticKeyIter("/pic", "nic"), common: buildStaticKeyIter("/pic"), tailKey: nil, tailPath: buildStaticKeyIter("nic")},
-		{value: "/pic", path: buildStaticKeyIter("/picture", "/nic"), common: buildStaticKeyIter("/pic"), tailKey: nil, tailPath: buildStaticKeyIter("ture/nic")},
-		{value: "/abc", path: buildStaticKeyIter("/"), common: buildStaticKeyIter("/"), tailKey: buildStaticKeyIter("abc"), tailPath: nil},
-		{value: "/picnic", path: buildStaticKeyIter("/abc", "/hello", "world"), common: buildStaticKeyIter("/"), tailKey: buildStaticKeyIter("picnic"), tailPath: buildStaticKeyIter("abc/hello", "world")},
-		{value: "/123", path: buildStaticKeyIter("/123abc"), common: buildStaticKeyIter("/123"), tailKey: nil, tailPath: buildStaticKeyIter("abc")},
-		{value: "/123/", path: buildStaticKeyIter("/123/abc"), common: buildStaticKeyIter("/123/"), tailKey: nil, tailPath: buildStaticKeyIter("abc")},
-		{value: "123/", path: buildStaticKeyIter("/123/abc"), common: nil, tailKey: buildStaticKeyIter("123/"), tailPath: buildStaticKeyIter("/123/abc")},
-		{value: "123/", path: buildStaticKeyIter("/123", "/abc"), common: nil, tailKey: buildStaticKeyIter("123/"), tailPath: buildStaticKeyIter("/123", "/abc")},
-		{value: "123", path: buildStaticKeyIter("/123/abc"), common: nil, tailKey: buildStaticKeyIter("123"), tailPath: buildStaticKeyIter("/123/abc")},
-		{value: "123abc", path: buildStaticKeyIter("123/abc"), common: buildStaticKeyIter("123"), tailKey: buildStaticKeyIter("abc"), tailPath: buildStaticKeyIter("/abc")},
-		{value: "123abc", path: buildStaticKeyIter("123/abc", "def"), common: buildStaticKeyIter("123"), tailKey: buildStaticKeyIter("abc"), tailPath: buildStaticKeyIter("/abcdef")},
-		{value: "123/abc", path: buildStaticKeyIter("123/"), common: buildStaticKeyIter("123/"), tailKey: buildStaticKeyIter("abc"), tailPath: nil},
+		//Static VS Static
+		//{value: "/", path: buildKeyIter("/abc"), common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter("abc")},
+		//{value: "/", path: buildKeyIter("/", "abc"), common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter("abc")},
+		//{value: "/", path: buildKeyIter("/123", "abc"), common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter("123abc")},
+		//{value: "/123", path: buildKeyIter("/pic", "nic"), common: buildKeyIter("/"), tailKey: buildKeyIter("123"), tailPath: buildKeyIter("picnic")},
+		//{value: "/pic", path: buildKeyIter("/pic", "nic"), common: buildKeyIter("/pic"), tailKey: nil, tailPath: buildKeyIter("nic")},
+		//{value: "/pic", path: buildKeyIter("/picture", "/nic"), common: buildKeyIter("/pic"), tailKey: nil, tailPath: buildKeyIter("ture/nic")},
+		//{value: "/abc", path: buildKeyIter("/"), common: buildKeyIter("/"), tailKey: buildKeyIter("abc"), tailPath: nil},
+		//{value: "/picnic", path: buildKeyIter("/abc", "/hello", "world"), common: buildKeyIter("/"), tailKey: buildKeyIter("picnic"), tailPath: buildKeyIter("abc/hello", "world")},
+		//{value: "/123", path: buildKeyIter("/123abc"), common: buildKeyIter("/123"), tailKey: nil, tailPath: buildKeyIter("abc")},
+		//{value: "/123/", path: buildKeyIter("/123/abc"), common: buildKeyIter("/123/"), tailKey: nil, tailPath: buildKeyIter("abc")},
+		//{value: "123/", path: buildKeyIter("/123/abc"), common: nil, tailKey: buildKeyIter("123/"), tailPath: buildKeyIter("/123/abc")},
+		//{value: "123/", path: buildKeyIter("/123", "/abc"), common: nil, tailKey: buildKeyIter("123/"), tailPath: buildKeyIter("/123", "/abc")},
+		//{value: "123", path: buildKeyIter("/123/abc"), common: nil, tailKey: buildKeyIter("123"), tailPath: buildKeyIter("/123/abc")},
+		//{value: "123abc", path: buildKeyIter("123/abc"), common: buildKeyIter("123"), tailKey: buildKeyIter("abc"), tailPath: buildKeyIter("/abc")},
+		//{value: "123abc", path: buildKeyIter("123/abc", "def"), common: buildKeyIter("123"), tailKey: buildKeyIter("abc"), tailPath: buildKeyIter("/abcdef")},
+		//{value: "123/abc", path: buildKeyIter("123/"), common: buildKeyIter("123/"), tailKey: buildKeyIter("abc"), tailPath: nil},
+		//Static VS Star
+		//{value: "/", path: buildKeyIter("/*"), common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter("*")},
+		//{value: "/", path: buildKeyIter("/", "*"), common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter("*")},
+		//{value: "/", path: buildKeyIter("/abc", "*"), common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter("abc", "*")},
+		//{value: "/123", path: buildKeyIter("/*"), common: buildKeyIter("/"), tailKey: buildKeyIter("123"), tailPath: buildKeyIter("*")},
+		//{value: "123", path: buildKeyIter("*"), common: buildKeyIter("*"), tailKey: nil, tailPath: nil, override: true},
+		//{value: "/pic", path: buildKeyIter("/pic", "*"), common: buildKeyIter("/pic"), tailKey: nil, tailPath: buildKeyIter("*")},
+		//{value: "/pic", path: buildKeyIter("/picture", "/*"), common: buildKeyIter("/pic"), tailKey: nil, tailPath: buildKeyIter("ture/", "*")},
+		//{value: "abc", path: buildKeyIter("/*"), common: nil, tailKey: buildKeyIter("abc"), tailPath: buildKeyIter("/", "*")},
+		//Static VS Colon
+		//{value: "/", path: buildKeyIter("/:abc"), common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter(":abc")},
+		//{value: "/", path: buildKeyIter("/", ":abc"), common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter(":abc")},
+		//{value: "/", path: buildKeyIter("/abc", ":def"), common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter("abc", ":def")},
+		//{value: "/123", path: buildKeyIter("/:abc"), common: buildKeyIter("/"), tailKey: buildKeyIter("123"), tailPath: buildKeyIter(":abc")},
+		//{value: "123", path: buildKeyIter(":abc"), common: buildKeyIter(":abc"), tailKey: nil, tailPath: nil, override: true},
+		//{value: "/pic", path: buildKeyIter("/pic", ":abc"), common: buildKeyIter("/pic"), tailKey: nil, tailPath: buildKeyIter(":abc")},
+		//{value: "/pic", path: buildKeyIter("/picture", "/:abc"), common: buildKeyIter("/pic"), tailKey: nil, tailPath: buildKeyIter("ture/", ":abc")},
+		//{value: "abc", path: buildKeyIter("/:def"), common: nil, tailKey: buildKeyIter("abc"), tailPath: buildKeyIter("/", ":def")},
+		//{value: "/pic", path: buildKeyIter("/picture", "/:abc/123"), common: buildKeyIter("/pic"), tailKey: nil, tailPath: buildKeyIter("ture/", ":abc", "/123")},
+		//{value: "123", path: buildKeyIter(":abc/def"), common: buildKeyIter(":abc"), tailKey: nil, tailPath: buildKeyIter("/def"), override: true},
+		//{value: "123", path: buildKeyIter(":abc/def/*"), common: buildKeyIter(":abc"), tailKey: nil, tailPath: buildKeyIter("/def/", "*"), override: true},
+		//{value: "/123", path: buildKeyIter("/:abc/def/*"), common: buildKeyIter("/"), tailKey: buildKeyIter("123"), tailPath: buildKeyIter(":abc", "/def/", "*")},
+		//Static VS Regex
+		//{value: "/", path: buildKeyIter("/{abc}"), common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter("{abc}")},
+		//{value: "/", path: buildKeyIter("/", "{abc}"), common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter("{abc}")},
+		//{value: "/", path: buildKeyIter("/abc", "{def}"), common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter("abc", "{def}")},
+		//{value: "/123", path: buildKeyIter("/{abc}"), common: buildKeyIter("/"), tailKey: buildKeyIter("123"), tailPath: buildKeyIter("{abc}")},
+		{value: "123", path: buildKeyIter("/{abc}"), common: nil, tailKey: buildKeyIter("123"), tailPath: buildKeyIter("/{abc}")},
+		{value: "123", path: buildKeyIter("{abc}"), common: nil, tailKey: buildKeyIter("123"), tailPath: buildKeyIter("{abc}")},
+		{value: "123", path: buildKeyIter("{123}"), common: buildKeyIter("{123}"), tailKey: nil, tailPath: nil, override: true},
+		{value: "/pic", path: buildKeyIter("/picture", "/{abc}"), common: buildKeyIter("/pic"), tailKey: nil, tailPath: buildKeyIter("ture/", "{abc}")},
+		{value: "pic", path: buildKeyIter("{pic[a-z]*}"), common: buildKeyIter("{pic[a-z]*}"), tailKey: nil, tailPath: nil, override: true},
 	}
 	for _, tc := range tcs {
 		var sk Key[string] = &staticKey{value: tc.value}
 		assert.Equal(t, tc.value, sk.(*staticKey).value)
-		c, tk, tp, _ := sk.MatchIterator(tc.path)
+		c, tk, tp, o := sk.MatchIterator(tc.path)
 		if tc.common == nil {
 			assert.Nil(t, c)
 		} else {
 			assert.True(t, c.HasNext())
-			assert.Equal(t, tc.common.Next().(*staticKey).value, c.Next().(*staticKey).value)
+			assert.Equal(t, tc.common.Next().String(), c.Next().String())
+			assert.Equal(t, tc.override, o)
 		}
 		if tc.tailKey == nil {
 			assert.Nil(t, tk)
 		} else {
 			assert.True(t, tk.HasNext())
-			assert.Equal(t, tc.tailKey.Next().(*staticKey).value, tk.Next().(*staticKey).value)
+			assert.Equal(t, tc.tailKey.Next().String(), tk.Next().String())
 		}
 		if tc.tailPath == nil {
 			assert.Nil(t, tp)
 		} else {
 			assert.True(t, tp.HasNext())
-			assert.Equal(t, tc.tailPath.Next().(*staticKey).value, tp.Next().(*staticKey).value)
+			assert.Equal(t, tc.tailPath.Next().String(), tp.Next().String())
 		}
 	}
 }
@@ -144,22 +178,22 @@ func TestWildcardStarKeyMatchIterator(t *testing.T) {
 		tailKey  KeyIterator[string]
 		tailPath KeyIterator[string]
 	}{
-		{value: "*", path: buildStaticKeyIter("abc"), common: buildStaticKeyIter("/"), tailKey: nil, tailPath: buildStaticKeyIter("abc")},
-		{value: "/*", path: buildStaticKeyIter("/", "abc"), common: buildStaticKeyIter("/"), tailKey: nil, tailPath: buildStaticKeyIter("abc")},
-		{value: "/*", path: buildStaticKeyIter("/123", "abc"), common: buildStaticKeyIter("/"), tailKey: nil, tailPath: buildStaticKeyIter("123abc")},
-		{value: "/123*", path: buildStaticKeyIter("/pic", "nic"), common: buildStaticKeyIter("/"), tailKey: buildStaticKeyIter("123"), tailPath: buildStaticKeyIter("picnic")},
-		//{value: "/pic*", path: buildStaticKeyIter("/pic", "nic"), common: buildStaticKeyIter("/pic"), tailKey: nil, tailPath: buildStaticKeyIter("nic")},
-		//{value: "/pic*", path: buildStaticKeyIter("/picture", "/nic"), common: buildStaticKeyIter("/pic"), tailKey: nil, tailPath: buildStaticKeyIter("ture/nic")},
-		//{value: "/abc*", path: buildStaticKeyIter("/"), common: buildStaticKeyIter("/"), tailKey: buildStaticKeyIter("abc"), tailPath: nil},
-		//{value: "/picnic*", path: buildStaticKeyIter("/abc", "/hello", "world"), common: buildStaticKeyIter("/"), tailKey: buildStaticKeyIter("picnic"), tailPath: buildStaticKeyIter("abc/hello", "world")},
-		//{value: "/123*", path: buildStaticKeyIter("/123abc"), common: buildStaticKeyIter("/123"), tailKey: nil, tailPath: buildStaticKeyIter("abc")},
-		//{value: "/123/*", path: buildStaticKeyIter("/123/abc"), common: buildStaticKeyIter("/123/"), tailKey: nil, tailPath: buildStaticKeyIter("abc")},
-		//{value: "123/*", path: buildStaticKeyIter("/123/abc"), common: nil, tailKey: buildStaticKeyIter("123/"), tailPath: buildStaticKeyIter("/123/abc")},
-		//{value: "123/*", path: buildStaticKeyIter("/123", "/abc"), common: nil, tailKey: buildStaticKeyIter("123/"), tailPath: buildStaticKeyIter("/123", "/abc")},
-		//{value: "123*", path: buildStaticKeyIter("/123/abc"), common: nil, tailKey: buildStaticKeyIter("123"), tailPath: buildStaticKeyIter("/123/abc")},
-		//{value: "123abc*", path: buildStaticKeyIter("123/abc"), common: buildStaticKeyIter("123"), tailKey: buildStaticKeyIter("abc"), tailPath: buildStaticKeyIter("/abc")},
-		//{value: "123abc*", path: buildStaticKeyIter("123/abc", "def"), common: buildStaticKeyIter("123"), tailKey: buildStaticKeyIter("abc"), tailPath: buildStaticKeyIter("/abcdef")},
-		//{value: "123/abc*", path: buildStaticKeyIter("123/"), common: buildStaticKeyIter("123/"), tailKey: buildStaticKeyIter("abc"), tailPath: nil},
+		//{value: "*", path: buildKeyIter("abc"), common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter("abc")},
+		//{value: "/*", path: buildKeyIter("/", "abc"), common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter("abc")},
+		//{value: "/*", path: buildKeyIter("/123", "abc"), common: buildKeyIter("/"), tailKey: nil, tailPath: buildKeyIter("123abc")},
+		//{value: "/123*", path: buildKeyIter("/pic", "nic"), common: buildKeyIter("/"), tailKey: buildKeyIter("123"), tailPath: buildKeyIter("picnic")},
+		//{value: "/pic*", path: buildKeyIter("/pic", "nic"), common: buildKeyIter("/pic"), tailKey: nil, tailPath: buildKeyIter("nic")},
+		//{value: "/pic*", path: buildKeyIter("/picture", "/nic"), common: buildKeyIter("/pic"), tailKey: nil, tailPath: buildKeyIter("ture/nic")},
+		//{value: "/abc*", path: buildKeyIter("/"), common: buildKeyIter("/"), tailKey: buildKeyIter("abc"), tailPath: nil},
+		//{value: "/picnic*", path: buildKeyIter("/abc", "/hello", "world"), common: buildKeyIter("/"), tailKey: buildKeyIter("picnic"), tailPath: buildKeyIter("abc/hello", "world")},
+		//{value: "/123*", path: buildKeyIter("/123abc"), common: buildKeyIter("/123"), tailKey: nil, tailPath: buildKeyIter("abc")},
+		//{value: "/123/*", path: buildKeyIter("/123/abc"), common: buildKeyIter("/123/"), tailKey: nil, tailPath: buildKeyIter("abc")},
+		//{value: "123/*", path: buildKeyIter("/123/abc"), common: nil, tailKey: buildKeyIter("123/"), tailPath: buildKeyIter("/123/abc")},
+		//{value: "123/*", path: buildKeyIter("/123", "/abc"), common: nil, tailKey: buildKeyIter("123/"), tailPath: buildKeyIter("/123", "/abc")},
+		//{value: "123*", path: buildKeyIter("/123/abc"), common: nil, tailKey: buildKeyIter("123"), tailPath: buildKeyIter("/123/abc")},
+		//{value: "123abc*", path: buildKeyIter("123/abc"), common: buildKeyIter("123"), tailKey: buildKeyIter("abc"), tailPath: buildKeyIter("/abc")},
+		//{value: "123abc*", path: buildKeyIter("123/abc", "def"), common: buildKeyIter("123"), tailKey: buildKeyIter("abc"), tailPath: buildKeyIter("/abcdef")},
+		//{value: "123/abc*", path: buildKeyIter("123/"), common: buildKeyIter("123/"), tailKey: buildKeyIter("abc"), tailPath: nil},
 	}
 	for _, tc := range tcs {
 		var sk Key[string] = &staticKey{value: tc.value}
