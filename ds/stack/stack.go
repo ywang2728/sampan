@@ -1,63 +1,93 @@
 package stack
 
 import (
-	"container/list"
 	"fmt"
 	"strings"
 	"sync"
+	"unsafe"
 )
 
 type (
-	Stack[E any] struct {
-		l *list.List
-		sync.RWMutex
+	Stacker[E any] interface {
+		Push(e E)
+		Pop() E
+	}
+
+	element[E any] struct {
+		prev  unsafe.Pointer
+		value E
+		next  unsafe.Pointer
+	}
+
+	MutexStack[E any] struct {
+		head *element[E]
+		tail *element[E]
+		mtx  sync.RWMutex
+	}
+
+	CasStack[E any] struct {
+		head *element[E]
 	}
 )
 
-func New[E any]() *Stack[E] {
-	return &Stack[E]{
-		l: list.New(),
+func NewMutexStack[E any]() *MutexStack[E] {
+	return &MutexStack[E]{}
+}
+
+func NewCasStack[E any]() *CasStack[E] {
+	return &CasStack[E]{}
+}
+
+func (ms *MutexStack[E]) Push(e E) {
+	ms.mtx.Lock()
+	defer ms.mtx.Unlock()
+	elem := &element[E]{value: e}
+	if ms.tail == nil {
+		ms.head = elem
+	} else {
+		elem.prev = unsafe.Pointer(ms.tail)
+		ms.tail.next = unsafe.Pointer(elem)
 	}
+	ms.tail = elem
 }
 
-func (s *Stack[E]) Push(e E) {
-	s.Lock()
-	defer s.Unlock()
-	s.l.PushFront(e)
-}
-
-func (s *Stack[E]) Pop() (e E, ok bool) {
-	s.Lock()
-	defer s.Unlock()
-	elem := s.l.Front()
-	if elem != nil {
-		e = s.l.Remove(elem).(E)
+func (ms *MutexStack[E]) Pop() (value E, ok bool) {
+	ms.mtx.Lock()
+	defer ms.mtx.Unlock()
+	if ms.tail != nil {
 		ok = true
+		value = ms.tail.value
+		ms.tail = (*element[E])(ms.tail.prev)
+		if ms.tail == nil {
+			ms.head = nil
+		} else {
+			ms.tail.next = nil
+		}
 	}
 	return
 }
 
-func (s *Stack[E]) IsEmpty() bool {
-	s.RLock()
-	defer s.RUnlock()
-	return s.l.Front() == nil
-}
-
-func (s *Stack[E]) Peek() (e E) {
-	s.RLock()
-	defer s.RUnlock()
-	elem := s.l.Front()
-	if elem != nil {
-		e = elem.Value.(E)
+func (ms *MutexStack[E]) Peek() (value E, ok bool) {
+	ms.mtx.RLock()
+	defer ms.mtx.RUnlock()
+	if ms.tail != nil {
+		ok = true
+		value = ms.tail.value
 	}
 	return
 }
 
-func (s *Stack[e]) String() string {
+func (ms *MutexStack[E]) IsEmpty() bool {
+	ms.mtx.RLock()
+	defer ms.mtx.RUnlock()
+	return ms.head == nil
+}
+
+func (ms *MutexStack[e]) String() string {
 	var sb strings.Builder
-	sb.WriteString("Stack[")
-	for e := s.l.Front(); e != nil; e = e.Next() {
-		sb.WriteString(fmt.Sprintf("%+v ", e.Value))
+	sb.WriteString("MutexStack[")
+	for curr := ms.head; curr != nil; curr = (*element[e])(curr.next) {
+		sb.WriteString(fmt.Sprintf("%v ", curr.value))
 	}
 	return strings.TrimRight(sb.String(), " ") + "]"
 }
