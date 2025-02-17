@@ -101,7 +101,7 @@ func (cs *CasStack[E]) Push(e E) {
 		old := atomic.LoadPointer(&cs.top)
 		elem.next = old
 		if atomic.CompareAndSwapPointer(&cs.top, old, unsafe.Pointer(elem)) {
-			cs.len++
+			atomic.AddUint64(&cs.len, 1)
 			return
 		}
 	}
@@ -114,7 +114,7 @@ func (cs *CasStack[E]) Pop() (value E, ok bool) {
 			oldElem := (*element[E])(old)
 			next := atomic.LoadPointer(&oldElem.next)
 			if atomic.CompareAndSwapPointer(&cs.top, old, next) {
-				cs.len--
+				atomic.AddUint64(&cs.len, ^uint64(0))
 				return oldElem.value, true
 			}
 		}
