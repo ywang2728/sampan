@@ -22,6 +22,25 @@ func TestIndexNth(t *testing.T) {
 		{"abcbb", 'c', 1, 2},
 	}
 	for _, tc := range tcs {
-		assert.Equal(t, tc.index, indexNth(tc.key, tc.char, tc.occur))
+		assert.Equal(t, tc.index, IndexNth(tc.key, tc.char, tc.occur))
 	}
+}
+
+func TestInfix2Suffix(t *testing.T) {
+	tcs := []struct {
+		infix  string
+		suffix []string
+	}{
+		{"2+3*(7-4)+8/4", []string{"2", "3", "7", "4", "-", "*", "+", "8", "4", "/", "+"}},
+		{"((2+3)*4-(8+2))/5", []string{"2", "3", "+", "4", "*", "8", "2", "+", "-", "5", "/"}},
+		{"1314+25.5*12", []string{"1314", "25.5", "12", "*", "+"}},
+		{"-2*(+3)", []string{"-2", "3", "*"}},
+		{"-2*(+3)-10", []string{"-2", "3", "*", "10", "-"}},
+		{"123", []string{"123"}},
+		{"-123", []string{"-123"}},
+	}
+	for _, tc := range tcs {
+		assert.Equal(t, tc.suffix, Infix2Suffix(&tc.infix))
+	}
+
 }

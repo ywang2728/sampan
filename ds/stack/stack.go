@@ -118,6 +118,7 @@ func (cs *CasStack[E]) Pop() (value E, ok bool) {
 				return oldElem.value, true
 			}
 		}
+		return
 	}
 }
 
@@ -134,13 +135,17 @@ func (cs *CasStack[E]) Peek() (value E, ok bool) {
 
 func (cs *CasStack[E]) IsEmpty() bool {
 	for {
-		return atomic.LoadPointer(&cs.top) == nil
+		return atomic.LoadPointer(&cs.top) == nil && cs.len == 0
 	}
+}
+
+func (cs *CasStack[E]) Len() uint64 {
+	return cs.len
 }
 
 func (cs *CasStack[E]) String() string {
 	var sb strings.Builder
-	sb.WriteString("MutexStack[")
+	sb.WriteString("CasStack[")
 	for curr := atomic.LoadPointer(&cs.top); curr != nil; curr = (*element[E])(curr).next {
 		sb.WriteString(fmt.Sprintf("%v ", (*element[E])(curr).value))
 	}
